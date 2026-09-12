@@ -26,6 +26,7 @@ Updated 2026-09-12.
 | Subgraphs, both deployed | Done | **Yes**. See Subgraphs. |
 | Leaderboard and profile P&L, served from the subgraph | Done | **Yes** |
 | MCP server over both subgraphs | Done | Not a client dependency — see below |
+| Liquidation keeper | Done, not yet always-on | **Yes**, but see below |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
 endpoints land they answer with the same shapes, so nothing you write against the mock has to
@@ -467,6 +468,25 @@ reason: the way it phrases answers is the way these numbers should be phrased in
 - A trader's own P&L and their copiers' P&L are separate numbers, and the second is the one that
   answers "should I copy them".
 
+### Positions can now be liquidated
+
+`contracts/keeper` watches for underwater positions and calls `liquidate`. Until now nothing did,
+so a position could sit underwater indefinitely. Two consequences for the UI:
+
+**A position can disappear without its owner closing it.** `positions(tokenId)` reverts with
+`UnknownPosition` once it is gone, exactly as it does after a normal close, so handle the revert
+rather than expecting an empty struct. The subgraph distinguishes the two: `status` is `LIQUIDATED`
+rather than `CLOSED`, and `closedBy` is the liquidator.
+
+**`liquidationReward` is only set on a liquidated position.** It is the USDC the liquidator was
+paid, taken out of the payout the owner would otherwise have received.
+
+Current parameters on testnet: a position is liquidatable once it has lost 90% of its collateral,
+and the liquidator is paid 1% of collateral. Both are readable on chain from
+`liquidationThresholdBps()` and `liquidationRewardBps()` rather than hard-coded.
+
+The keeper is not running continuously yet, so do not rely on liquidation being prompt on testnet.
+
 ---
 
 ## Writing state
@@ -572,6 +592,10 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-12** — The liquidation keeper is live in `contracts/keeper` and has liquidated a real
+  position on Arc testnet. Positions can now close without their owner acting; `status` is
+  `LIQUIDATED` in the subgraph and `liquidationReward` is set.
 
 - **2026-09-12** — An MCP server over both subgraphs is live in `cope-market/mcp`: vault history and
   cross-protocol comparison, trader rankings, and copy-lineage outcomes. Read-only, no key. Not a
