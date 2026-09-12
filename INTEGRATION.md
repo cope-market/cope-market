@@ -416,9 +416,10 @@ once the leaderboard is wired.
 
 ### Things the subgraphs will surprise you with
 
-**Addresses are lower-case in queries and in results.** `where: {author: "0xEeb3..."}` matches
-nothing. Lower-case every address before it goes into a query, and do not compare a result to a
-checksummed string.
+**Addresses come back lower-case.** Queries take either form — graph-node normalises hex on the way
+in, so a checksummed address in `id:` or `where:` matches fine. Results do not: every address in a
+response is lower-case, so `result.author.id === wallet.address` is false against a checksummed
+wallet address. Compare lower-case to lower-case.
 
 **`totalAssets` on the vault is not live.** It is what the contract said at `lastUpdatedBlock`. The
 pool's assets move with no event — traders win and lose against it — and a subgraph only runs when
