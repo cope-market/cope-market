@@ -25,6 +25,7 @@ Updated 2026-09-12.
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
 | Subgraphs, both deployed | Done | **Yes**. See Subgraphs. |
 | Leaderboard and profile P&L, served from the subgraph | Done | **Yes** |
+| MCP server over both subgraphs | Done | Not a client dependency — see below |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
 endpoints land they answer with the same shapes, so nothing you write against the mock has to
@@ -450,6 +451,22 @@ P&L, so a flat close is a loss and `wins + losses` always equals `closedPosition
 **Position ids are not token ids.** The id is the token id as 32-byte big-endian, which is what
 makes `orderBy: id` mint order. Query by `tokenId` if that is what you have.
 
+### There is also an MCP server
+
+`cope-market/mcp` exposes the same data to AI agents: vault size and history, cross-protocol
+comparison, trader rankings, and whether copying a given author has paid. It reads the same two
+subgraphs and holds no key.
+
+Nothing in the app depends on it, and you do not need to integrate it. It matters to you for one
+reason: the way it phrases answers is the way these numbers should be phrased in the UI too.
+
+- A vault figure is as of its last indexed block, never "currently".
+- `n/a` and `0` are different. A vault with one snapshot has no return; an address with no history
+  is not a trader who broke even.
+- A drawdown is shown as a positive percentage meaning a fall.
+- A trader's own P&L and their copiers' P&L are separate numbers, and the second is the one that
+  answers "should I copy them".
+
 ---
 
 ## Writing state
@@ -555,6 +572,10 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-12** — An MCP server over both subgraphs is live in `cope-market/mcp`: vault history and
+  cross-protocol comparison, trader rankings, and copy-lineage outcomes. Read-only, no key. Not a
+  dependency for the app.
 
 - **2026-09-12** — Profile and leaderboard P&L are live. `realizedPnlUsd` and `winRate` are the
   subgraph's figures, reconciled against `openInterest` on the contract. The board now ranks on
