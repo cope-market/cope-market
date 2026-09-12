@@ -24,7 +24,7 @@ Updated 2026-09-12.
 | Social endpoints, live | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
 | Subgraphs, both deployed | Done | **Yes**. See Subgraphs. |
-| Leaderboard and profile P&L, served from the subgraph | Not wired yet | Returns zeros for now |
+| Leaderboard and profile P&L, served from the subgraph | Done | **Yes** |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
 endpoints land they answer with the same shapes, so nothing you write against the mock has to
@@ -37,6 +37,10 @@ document covers those calls.
 **History comes from the subgraph.** Anything that needs the past rather than the present — a
 trader's closed positions, realised P&L, the copy graph, a TVL or share-price chart — is a GraphQL
 query, not a chain call. There is no way to ask a contract what happened.
+
+**Profile and leaderboard figures are real now.** `stats.realizedPnlUsd` and the board's
+`realizedPnlUsd` and `winRate` used to be hard zeros. They are the subgraph's numbers, verified
+against the contract. You no longer have to special-case them.
 
 ---
 
@@ -435,6 +439,14 @@ it and never changes; `owner` is who holds it now. Rank and attribute on `author
 **A flat close is a loss.** `wins` counts strictly positive P&L, so `wins + losses ==
 positionsClosed` always holds and a win rate never counts a zero as a win.
 
+**The leaderboard fails when the subgraph is down; a profile does not.** A profile still returns
+its follow and copy counts with a zero P&L, because a profile is worth showing without that figure.
+A ranking built from missing data is a wrong order presented as a right one, so `GET /leaderboard`
+returns an `INTERNAL` error instead. Handle that on the leaderboard screen.
+
+**`winRate` is zero for anyone who has closed nothing**, not one. `wins` counts strictly positive
+P&L, so a flat close is a loss and `wins + losses` always equals `closedPositions`.
+
 **Position ids are not token ids.** The id is the token id as 32-byte big-endian, which is what
 makes `orderBy: id` mint order. Query by `tokenId` if that is what you have.
 
@@ -543,6 +555,10 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-12** — Profile and leaderboard P&L are live. `realizedPnlUsd` and `winRate` are the
+  subgraph's figures, reconciled against `openInterest` on the contract. The board now ranks on
+  money made rather than on copies received.
 
 - **2026-09-12** — Both subgraphs deployed on Arc testnet and reconciled against the chain. The
   standardized ERC-4626 schema also builds against two unrelated MetaMorpho vaults on Base from
