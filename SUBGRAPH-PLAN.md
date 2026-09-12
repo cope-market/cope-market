@@ -60,6 +60,45 @@ must not.
 | **5.8** | Wire the backend | Leaderboard and profile stats read real P&L instead of returning "0" |
 | **5.9** | Verification | Both subgraphs live, the backend serving real numbers, and the standards claim demonstrable |
 
+## Step 5.8 in detail
+
+Two numbers currently answer "0" on purpose: `realizedPnlUsd` on a profile, and `realizedPnlUsd`
+and `winRate` on the leaderboard. They are the only figures the backend cannot derive from its own
+tables. The board is ranked on copies received and positions closed, which is defensible while
+there is nothing better and indefensible once there is.
+
+| # | Step | Done when |
+|---|---|---|
+| **5.8.1** | Subgraph client | A typed, validated GraphQL client with a timeout, unit-tested against a stubbed fetch |
+| **5.8.2** | Trader queries | Lifetime stats by address, and windowed stats aggregated from closed positions |
+| **5.8.3** | Profile stats | `userStats` returns real P&L and real position counts |
+| **5.8.4** | Leaderboard | Ranked on realised P&L, with a real win rate |
+| **5.8.5** | Verification | Numbers agree with the subgraph and the chain, end to end through the API |
+
+### Decisions to settle first
+
+**Identity.** The subgraph keys on wallet address, the backend on user id. `users.wallet_address`
+is the join, and the subgraph returns addresses lower-case, so the comparison has to be
+case-insensitive on both sides.
+
+**Windows.** `Trader` carries lifetime totals only. A 7-day or 30-day board therefore cannot read
+them: it has to aggregate `Position` rows with `closedAt` inside the window. Doing it that way for
+every window, including `all`, keeps one code path rather than two that can disagree.
+
+**Position counts.** These currently come from the `trades` table, which counts what went through
+this service. The subgraph counts what happened on chain, which is a superset: a position opened
+directly against the contract is real whether or not our API saw it. Moving to the subgraph makes
+the count true rather than merely ours.
+
+**Failure.** The two consumers deserve different treatment, and doing the same thing in both places
+would be wrong in one of them. A ranking built from missing data is a wrong ranking presented as a
+right one, so the leaderboard fails loudly. A profile is still worth showing without its P&L
+figure, so it degrades to the database-only numbers and logs. Anything else would reintroduce
+exactly the dishonesty the zeros were avoiding.
+
+**Caching.** A short in-process TTL. The leaderboard is the most-hit screen in a demo and the
+answer changes only when someone closes a position.
+
 ## Dependencies to resolve before starting
 
 1. **A repository.** `cope-market/subgraph`, so the Track 1 submission is a clean public repo rather
