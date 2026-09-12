@@ -19,8 +19,9 @@ Updated 2026-09-12.
 |---|---|---|
 | Contracts on Arc testnet | Deployed and verified | **Yes** |
 | API contract, typed client, mock server | Done | **Yes** |
+| Config and profile endpoints, live | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
-| Backend API, real endpoints | Not started | Use the mock |
+| Trading and social endpoints | Not started | Use the mock |
 | Subgraph | Not started | No |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
@@ -88,6 +89,36 @@ comments, feed, leaderboard, trade intent and confirm, notifications, devices.
 
 There are deliberately **no** routes for positions, prices, balances or liquidity-vault state. Those
 come from the chain.
+
+### Which routes are real yet
+
+Six are implemented against a live database. The rest answer from the mock with the same shapes.
+
+| Route | State |
+|---|---|
+| `GET chains` | Live. Contract addresses come from the server, so do not hard-code them. |
+| `GET assets` | Live. Four entitled feeds. |
+| `POST auth/session` | Live. Send the Privy token; the account is created on first sight. |
+| `GET me`, `PATCH me` | Live. |
+| `GET users/{handle}` | Live. |
+| everything else | Mock only |
+
+**Profile stats are zeroed placeholders.** `openPositions`, `realizedPnlUsd`, `followers` and the
+rest return `0` until positions and follows exist. The fields are real and the shape will not change
+— only the numbers.
+
+### Signing in
+
+1. Privy signs the user in with X. App ID `cmtydcbsd02f00cjkdaadli5p`.
+2. Call `POST auth/session` with the Privy access token as the bearer credential. This creates the
+   account on first sight and returns the profile.
+3. Send the same bearer token on every authenticated call after that.
+
+Until step 2 runs at least once, an authenticated call returns `UNAUTHORIZED` with the message "No
+account exists for this token". A valid token is not an account.
+
+Two 401 cases carry different messages on purpose: no token at all, and a token that does not
+verify. Show the user different things.
 
 ---
 
@@ -344,6 +375,8 @@ Decode the revert and show a specific message. Each selector is stable.
 
 ## Changelog
 
+- **2026-09-12** — Configuration and profile endpoints are live against a real database. Privy
+  sign-in works end to end. Everything else still answers from the mock.
 - **2026-09-12** — API contract frozen. Typed client and mock server available; 26 routes, OpenAPI
   3.1 spec generated and checked in CI. Chain reads stay direct.
 - **2026-09-12** — First version. Contracts deployed and verified on Arc testnet.
