@@ -3,7 +3,8 @@
 Companion to `PLAN.md`. This document specifies the on-chain contracts, the math and invariants they
 enforce, the off-chain services, the data model, the API contract, and the threat model.
 
-**Target chain:** Arc (testnet `5042002` during development, mainnet `5042` from Sept 16).
+**Target chain:** Arc (testnet `5042002`; mainnet `5042` is the same contracts and a cutover, not
+a rewrite — see §6).
 **Collateral and gas:** USDC.
 
 ---
@@ -11,29 +12,137 @@ enforce, the off-chain services, the data model, the API contract, and the threa
 ## 1. System overview
 
 Cope Market is a social feed on top of a synthetic trading venue. Users post event-driven theses
-backed by real positions; a USDC pool supplied by LPs is the counterparty to every position; prices
-come from Pyth; copy attribution and author profit-share settle on-chain.
+backed by real positions; a USDC pool supplied by LPs is the counterparty to every position; copy
+attribution and author profit-share settle on-chain, in USDC, with nothing to reconcile afterwards.
+
+Everything below runs on Arc testnet today and is verified against it rather than described: the
+contracts are deployed and verified on the explorer, the subgraphs are live and reconciled to the
+wei against contract calls, and both services have been run against the live deployment.
+
+### 1.1 Components
 
 ```mermaid
-graph TD
-    U[User - PWA] -->|Privy embedded wallet| SV[SyntheticVault ERC-721]
-    LP[Liquidity provider] -->|deposit USDC| LV[LiquidityVault ERC-4626]
-    SV <-->|profit pull / loss push / fees| LV
-    SV -->|getPrice| OR[IPriceOracle]
-    OR --> PY[PythOracle]
-    OR --> CL[ChainlinkOracle - mainnet fallback]
-    SV -->|events| SG[Subgraph - The Graph]
-    API[Next.js API v1] -->|builds unsigned tx| U
-    API -->|reads| SG
-    API -->|reads| DB[(Supabase Postgres)]
-    API -->|price blobs| HER[Pyth Hermes]
-    U -->|signs and sends| SV
+flowchart TB
+    subgraph user["User plane"]
+        UI["Installable PWA<br/>feed, thesis, trade, LP"]
+        PW["Privy embedded wallet<br/>holds the key"]
+    end
+
+    subgraph service["Service plane — holds no key"]
+        API["API v1<br/>authenticate, validate,<br/>quote, build the transaction"]
+        PG[("Postgres<br/>theses, follows, comments")]
+    end
+
+    subgraph chain["Arc L1 — every USDC balance, position and fee"]
+        SV["SyntheticVault<br/>ERC-721 positions,<br/>copy attribution, settlement"]
+        LV["LiquidityVault<br/>ERC-4626 pool,<br/>counterparty to every position"]
+        PO["PushOracle<br/>the price of record"]
+    end
+
+    UI -->|"quote request"| API
+    API -->|"unsigned transaction"| UI
+    API --> PG
+    API -->|"reads and simulates"| SV
+    UI --> PW
+    PW -->|"signs and sends"| SV
+    SV -->|"loss and fees"| LV
+    LV -->|"profit"| SV
+    SV -->|"getPrice"| PO
+
+    classDef onchain fill:#0b3d2e,stroke:#0b3d2e,color:#ffffff;
+    class SV,LV,PO onchain;
 ```
+
+**Three properties this shape buys.**
+
+*The backend never holds a key.* It builds an unsigned transaction and simulates it, so a user gets
+a reason instead of a revert; the Privy embedded wallet signs. A compromised API server can lie to
+a user but cannot move their money.
+
+*The database holds no financial state.* Wipe Postgres and every position, balance, fee and copy
+relationship survives on-chain. What is lost is the social layer, which is the only thing that
+cannot be reconstructed from the chain — and the only thing that does not need to be.
+
+*Automation is permissionless, not privileged.* `liquidate` is callable by anyone and the keeper is
+simply the party that bothers. If our keeper stops, the protocol degrades rather than breaks.
 
 **Division of responsibility**
 
 | Concern | Owner |
 |---|---|
+| Money, price, position state, settlement | Contracts on Arc |
+| Social content: theses, tweets, comments, follows | Postgres |
+| Derived read models: realised PnL, leaderboard, copy lineage | Subgraphs |
+| Transaction construction, authentication, validation | Next.js API |
+| Signing | Privy embedded wallet, client side only |
+| Price liveness, liquidation | Always-on services — see §1.2 |
+
+---
+
+### 1.2 What keeps it alive
+
+Two always-on services and three subgraphs. Neither service is privileged: `liquidate` is callable
+by anyone and `PushOracle` accepts writes from any allowlisted pusher, so ours is the party that
+bothers rather than the party that is trusted.
+
+```mermaid
+flowchart LR
+    subgraph feed["Keeping prices usable"]
+        direction TB
+        HER["Pyth Hermes"]
+        PUSH["Price pusher<br/>scales to 18 decimals,<br/>drops non-newer stamps,<br/>verifies against maxAgeSec"]
+        PO["PushOracle"]
+        HER --> PUSH
+        PUSH -->|"pushMany"| PO
+    end
+
+    subgraph bound["Bounding the pool's risk"]
+        direction TB
+        KEEP["Liquidation keeper<br/>simulates liquidate,<br/>sends only if it would succeed"]
+    end
+
+    subgraph onchain["Arc L1"]
+        direction TB
+        SV["SyntheticVault"]
+        LV["LiquidityVault"]
+    end
+
+    subgraph read["Read models"]
+        direction TB
+        SGC["cope-market-arc<br/>positions, copy graph,<br/>realised PnL"]
+        SGV["erc-4626-vault-arc<br/>standardized ERC-4626"]
+        SGB["erc-4626-vault-base<br/>two MetaMorpho vaults,<br/>same schema, no new code"]
+    end
+
+    SV -->|"getPrice"| PO
+    KEEP -->|"liquidate"| SV
+    SV -->|"events"| SGC
+    LV -->|"events"| SGV
+    SGC -->|"leaderboard, profile PnL"| API["API v1"]
+    SGC --> MCP["MCP server<br/>read-only, no key"]
+    SGV --> MCP
+    SGB --> MCP
+
+    classDef onchainbox fill:#0b3d2e,stroke:#0b3d2e,color:#ffffff;
+    classDef svc fill:#1f3a5f,stroke:#1f3a5f,color:#ffffff;
+    class SV,LV,PO onchainbox;
+    class PUSH,KEEP svc;
+```
+
+*The pusher is the dependency to understand.* With a push oracle the vault's price is whatever was
+last written, so nothing opens and nothing closes without this service running. It judges its own
+success by reading the oracle back and comparing each feed's age against that asset's `maxAgeSec` —
+a mined transaction is not a usable price, and on a closed market the two differ.
+
+*The keeper never reimplements the vault's arithmetic.* It simulates `liquidate` with `eth_call`,
+so it acts exactly when a transaction would succeed and skips when the contract says the position
+is healthy. There is no second copy of the health check to drift from the first.
+
+*The standardized subgraph is a schema, not a product feature.* `erc-4626-vault-arc` describes any
+ERC-4626 vault and nothing about this protocol, which is why the same code, unmodified, indexes two
+MetaMorpho vaults on Base from a configuration file.
+
+---|---|
 | Money, price, position state, settlement | Contracts on Arc |
 | Social content: theses, tweets, comments, follows | Postgres |
 | Derived read models: P&L, leaderboard, copy lineage | Subgraph |
@@ -54,9 +163,10 @@ contracts/
   SyntheticVault.sol      ERC-721. Positions, open/close/liquidate, copy attribution.
   LiquidityVault.sol      ERC-4626. LP capital, NAV, payouts to the synthetic vault.
   oracle/
-    IPriceOracle.sol      Interface used by the vault.
-    PythOracle.sol        Pull model. Primary.
-    ChainlinkOracle.sol   Push model. Mainnet fallback.
+    IPriceOracle.sol      Interface used by the vault. The vault knows nothing else.
+    PushOracle.sol        Deployed. Written by the price pusher; the price of record today.
+    PythOracle.sol        Pull model. The intended design, blocked by Arc — see below.
+    ChainlinkOracle.sol   Push model. Mainnet fallback if Pyth is absent there too.
     MockOracle.sol        Tests only.
   libraries/
     Math.sol              Fixed-point helpers, 1e18 internals.
@@ -64,6 +174,15 @@ contracts/
 
 Three deployed contracts plus an oracle adapter. Two token standards, each used for what it is
 actually for: fungible ERC-4626 shares for LP capital, non-fungible ERC-721 for positions.
+
+**Four oracle implementations, one interface, and the vault knows which it is talking to only as an
+`IPriceOracle`.** That was a hedge when it was written and it turned out to be the thing that saved
+the project: Pyth's pull path is unusable on Arc because the chain's Wormhole receiver holds
+Wormhole's guardian set rather than Pythnet's, so a valid Pyth update is rejected on arrival. Proved
+by cross-chain control — the same Hermes blob is accepted on Base mainnet and rejected on Arc
+testnet with `InvalidWormholeVaa`. Swapping to `PushOracle` was a constructor argument and a
+service, not a change to the vault. `BUG-ARC-PYTH.md` in the contracts repository has the full
+trace.
 
 ### 2.2 Oracle interface
 
@@ -510,33 +629,98 @@ Hermes price updates require a Pyth Pro API key (`PYTH_API_KEY`). Feed metadata 
 
 ```mermaid
 sequenceDiagram
+    autonumber
     participant C as Client (PWA)
     participant A as API v1
-    participant H as Pyth Hermes
     participant V as SyntheticVault
-    C->>A: POST trades/intent {feedId, isLong, collateral, thesisId?, copyOf?}
-    A->>A: geo check, caps check, NAV check
-    A->>H: getUpdateData([feedId])
-    H-->>A: signed blob + fee
-    A->>A: encode open(...) with blob, build unsigned tx
-    A-->>C: {tradeId, quote, tx, expiresAt}
-    C->>V: sign and send (Privy)
-    V->>V: updatePrices, getPrice, skew by conf, mint ERC-721
+    participant O as PushOracle
+    participant L as LiquidityVault
+
+    C->>A: POST trades/intent
+    Note over A: authenticate, then check<br/>caps, confidence and pool capacity
+    A->>O: getPrice(feedId, maxAgeSec)
+    O-->>A: price, confidence, publishTime
+    A->>A: quote entry price, units and fee
+    A->>V: eth_call open(...) as the user
+    Note over A,V: The contract is the authority.<br/>Simulating first turns a revert<br/>into a reason the user can read.
+    A-->>C: tradeId, quote, unsigned tx, expiry
+
+    C->>C: Privy embedded wallet signs
+    C->>V: open(feedId, isLong, collateral, copiedFromId, [])
+    V->>O: getPrice
+    V->>V: skew entry by confidence,<br/>take the open fee, mint the ERC-721
+    V->>L: transfer the fee to the pool
+
     C->>A: POST trades/{id}/confirm {txHash}
-    A->>V: waitForTransactionReceipt, parse PositionOpened
+    A->>V: await receipt, parse PositionOpened
     A-->>C: position
 ```
 
-The Pyth pull model is the reason this shape works: the server is already the component that builds
-transactions, and a pull oracle needs exactly that. A push oracle would gain nothing from the
-architecture we already have.
+`updateData` is an empty array today because the oracle is a push oracle. Pyth's pull path is the
+design this shape was built for — the server already constructs the transaction, which is exactly
+what a pull oracle needs — and it is unavailable on Arc for a reason outside this project: the
+chain's Wormhole receiver holds Wormhole's guardian set rather than Pythnet's, so a valid Pyth
+update is rejected. The argument stays in the signature so the switch is a deployment, not a
+rewrite. See `BUG-ARC-PYTH.md` in the contracts repository.
+
+**The entry price is deliberately worse than the mid.** A long enters at `mid + confidence`, a short
+at `mid − confidence`, and both exit on the opposite side. Every position therefore starts fractionally
+underwater. That is not a fee dressed up as a spread: it is the pool refusing to take the oracle's
+uncertainty onto its own balance sheet, and it is why a wide confidence interval is rejected outright
+rather than priced.
 
 Quote expiry is 30 seconds, matched to `maxAgeSec`.
 
-### 4.2 Close
+### 4.2 Close and settle
 
-Same shape with `close(tokenId, updateData)`. The contract computes exit price, P&L, close fee, and
-the author fee if the position was a copy, then burns the NFT and settles with `LiquidityVault`.
+Same shape with `close(tokenId, updateData)`. What happens inside is the part worth drawing: one
+call computes an exit price, realises a profit or a loss against the pool, pays a fee, conditionally
+pays a third party who never signed anything, and burns the position — atomically, in USDC, with no
+invoice and nothing to reconcile afterwards.
+
+```mermaid
+flowchart TB
+    START(["close(tokenId)"]) --> EXIT["Exit price from PushOracle,<br/>skewed against the trader by<br/>the confidence interval"]
+    EXIT --> PNL["Realised PnL<br/>units x the price move,<br/>signed by side"]
+    PNL --> PAYOUT["payout = collateral + PnL - close fee<br/>floored at zero: a trader can be<br/>wiped out, never indebted"]
+    PAYOUT --> COPY{"Was this a copy<br/>that closed in profit?"}
+
+    COPY -->|"no"| CMP
+    COPY -->|"yes"| AFEE["Author fee<br/>a share of the profit only,<br/>capped at the payout"]
+    AFEE --> CMP{"payout against the collateral<br/>the position already holds"}
+
+    CMP -->|"payout is larger<br/>the trader won"| PULL["LiquidityVault.payout<br/>the pool covers the difference"]
+    CMP -->|"payout is smaller<br/>the trader lost"| PUSH["the remainder returns to the pool<br/>close fees arrive this way too"]
+    CMP -->|"equal"| PAY
+
+    PULL --> PAY["Transfer USDC"]
+    PUSH --> PAY
+    PAY --> OWNER(["Position owner<br/>receives the payout"])
+    PAY --> AUTHOR(["Original author<br/>receives the author fee"])
+    PAY --> BURN["Burn the ERC-721,<br/>clear the open interest"]
+
+    classDef pool fill:#0b3d2e,stroke:#0b3d2e,color:#ffffff;
+    classDef party fill:#1f3a5f,stroke:#1f3a5f,color:#ffffff;
+    class PULL,PUSH pool;
+    class OWNER,AUTHOR party;
+```
+
+**Why this is more than a transfer.** The author fee is a conditional payment to a party who is not
+present in the transaction, did not sign it, and may not know it happened: it exists only if the
+position was opened as a copy *and* closed in profit, it is a share of the profit rather than of the
+notional, and it is capped at the payout so it can never be funded out of someone else's collateral.
+The rate is snapshotted at copy time, so changing the protocol's fee never rewrites a deal somebody
+already took.
+
+**Why USDC being native matters here.** Collateral, the pool's balance sheet, the fee, the payout
+and the gas for the transaction are all the same asset. There is no swap, no wrapped representation,
+no second token to keep funded, and no price risk between the leg that pays and the leg that
+settles. On a chain where gas is a separate asset, a keeper that runs out of gas stops bounding the
+pool's risk while holding a balance it cannot spend on the problem.
+
+One consequence worth stating because it catches people: Arc's native currency and the ERC-20 at
+`0x3600…0000` are the same balance at different decimals, 18 and 6. Gas therefore moves the USDC
+balance, and anything reconciling a USDC figure has to account for it.
 
 ### 4.3 Copy
 
