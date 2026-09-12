@@ -22,11 +22,11 @@ Updated 2026-09-12.
 | Config and profile endpoints, live | Done | **Yes** |
 | Trading endpoints, live | Done | **Yes** |
 | Social endpoints, live | Done | **Yes** |
-| Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
+| Price pusher | A service now; needs enabling on the VPS | Partly. See Market hours. |
 | Subgraphs, both deployed | Done | **Yes**. See Subgraphs. |
 | Leaderboard and profile P&L, served from the subgraph | Done | **Yes** |
 | MCP server over both subgraphs | Done | Not a client dependency — see below |
-| Liquidation keeper | Done, not yet always-on | **Yes**, but see below |
+| Liquidation keeper | A service now; needs enabling on the VPS | **Yes**, but see below |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
 endpoints land they answer with the same shapes, so nothing you write against the mock has to
@@ -468,6 +468,18 @@ reason: the way it phrases answers is the way these numbers should be phrased in
 - A trader's own P&L and their copiers' P&L are separate numbers, and the second is the one that
   answers "should I copy them".
 
+### Checking whether prices are usable
+
+The pusher writes `/tmp/cope-pusher-status.json` on the VPS every cycle. Two separate things:
+
+- `ok` — the cycle ran at all.
+- `healthy` — every enabled feed is inside its own `maxAgeSec`, so the vault will accept it.
+
+They differ whenever a market is closed, which is most of the weekend. `ok: true, healthy: false`
+means the pusher is fine and three of four assets still cannot be traded — which is exactly what a
+user sees as "open position" reverting. If a trade fails with a stale-price error, check this before
+looking anywhere else.
+
 ### Positions can now be liquidated
 
 `contracts/keeper` watches for underwater positions and calls `liquidate`. Until now nothing did,
@@ -592,6 +604,10 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-12** — The price pusher is a real service with a heartbeat, a single-instance lock, an
+  interval checked against `maxAgeSec`, and a freshness check that judges a push by whether the
+  vault will accept the price rather than by whether the transaction was mined.
 
 - **2026-09-12** — The liquidation keeper is live in `contracts/keeper` and has liquidated a real
   position on Arc testnet. Positions can now close without their owner acting; `status` is
