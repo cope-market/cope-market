@@ -18,12 +18,76 @@ Updated 2026-09-12.
 | Layer | State | You can build against it |
 |---|---|---|
 | Contracts on Arc testnet | Deployed and verified | **Yes** |
+| API contract, typed client, mock server | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
-| Backend API (`/api/v1`) | Not started | No |
+| Backend API, real endpoints | Not started | Use the mock |
 | Subgraph | Not started | No |
 
-**There is no backend yet.** Until it exists, read directly from the contracts with viem. Writes
-will move behind the API later, so keep contract calls in one module you can swap.
+**The API shapes are frozen.** Build against the mock server and the typed client. When the real
+endpoints land they answer with the same shapes, so nothing you write against the mock has to
+change.
+
+**Chain reads stay direct.** Positions, prices, balances, liquidity-vault state and risk parameters
+are read from the contracts with viem and are deliberately not mirrored by the API. The rest of this
+document covers those calls.
+
+---
+
+## Using the API
+
+Repository: [cope-market/backend](https://github.com/cope-market/backend).
+
+### Run the mock
+
+No database, no chain, no environment to configure.
+
+```bash
+git clone https://github.com/cope-market/backend.git
+cd backend && npm ci
+npm run mock            # http://localhost:4000/api/v1
+PORT=4100 npm run mock  # somewhere else
+```
+
+Every route answers with a realistic fixture. Writes are not remembered, so a POST returns a
+plausible object but changes nothing. Authenticated routes need an `Authorization: Bearer <anything>`
+header; the mock does not inspect the value, it only checks that one is present, which is enough to
+exercise your signed-out paths.
+
+CORS is open, so a frontend on another port can call it from a browser.
+
+### Use the typed client
+
+```ts
+import {createApiClient} from "@cope-market/backend/lib/api-client/client";
+
+const api = createApiClient({
+  baseUrl: "http://localhost:4000/api/v1",
+  getAccessToken: async () => privy.getAccessToken(),
+});
+
+const {data} = await api.getFeed({query: {tab: "top", limit: 20}});
+const {thesis} = await api.getThesis({params: {thesisId: id}});
+```
+
+Argument and return types are derived from the same schemas the server validates against, so a call
+that compiles is a call the server understands. Responses are parsed before they reach you: if the
+server sends the wrong shape the client throws rather than passing it on.
+
+Errors throw `ApiRequestError` with a `code` from a closed set and the HTTP `status`. Switch on
+`code`, never on `message`.
+
+### The spec
+
+`public/openapi.json` in the backend repo, also served at `/api/v1/openapi.json`. Valid OpenAPI
+3.1, generated from the route definitions, and checked in CI so it cannot drift.
+
+### Routes
+
+26 routes: chain and asset catalogue, auth and profile, follows, tweet embeds, theses with likes and
+comments, feed, leaderboard, trade intent and confirm, notifications, devices.
+
+There are deliberately **no** routes for positions, prices, balances or liquidity-vault state. Those
+come from the chain.
 
 ---
 
@@ -280,4 +344,6 @@ Decode the revert and show a specific message. Each selector is stable.
 
 ## Changelog
 
-- **2026-09-12** — First version. Contracts deployed and verified on Arc testnet. No backend yet.
+- **2026-09-12** — API contract frozen. Typed client and mock server available; 26 routes, OpenAPI
+  3.1 spec generated and checked in CI. Chain reads stay direct.
+- **2026-09-12** — First version. Contracts deployed and verified on Arc testnet.
