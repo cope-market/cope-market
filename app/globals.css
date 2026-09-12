@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+ * Cope Market's surface: a dark venue where the numbers are the interface.
+ *
+ * Two rules hold the palette together. Green and red belong to P&L and to nothing else, so a gain
+ * is never confusable with a button; and the accent is violet precisely because it cannot be
+ * mistaken for either. Every number is set in tabular figures, so a column of prices lines up and
+ * a figure ticking over does not shift the layout under the reader's eye.
+ */
+
+@theme {
+  --color-ground: #08090b;
+  --color-surface: #0f1116;
+  --color-raised: #161921;
+  --color-overlay: #1c2029;
+  --color-line: #23262f;
+  --color-line-strong: #323744;
+
+  --color-ink: #e9ebef;
+  --color-muted: #8d94a1;
+  --color-dim: #5b626f;
+
+  --color-long: #29d391;
+  --color-long-soft: #0e3b2c;
+  --color-short: #ff5470;
+  --color-short-soft: #3d1420;
+  --color-accent: #8b7cff;
+  --color-accent-ink: #0c0a1a;
+  --color-warn: #f5a524;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+
+  --radius-card: 0.875rem;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: var(--font-sans);
+  /* Clearance for the fixed tab bar is applied per screen in AppChrome, because sign-in has no
+     bar and should not carry the space where one would be. */
+  overscroll-behavior-y: none;
+}
+
+/* Numerals never reflow as they tick. */
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+  letter-spacing: -0.01em;
+}
+
+/* A price that just moved, nudged rather than flashed. */
+@keyframes tick-up {
+  0% {
+    color: var(--color-long);
+  }
+  100% {
+    color: inherit;
+  }
+}
+@keyframes tick-down {
+  0% {
+    color: var(--color-short);
+  }
+  100% {
+    color: inherit;
+  }
+}
+.tick-up {
+  animation: tick-up 900ms ease-out;
+}
+.tick-down {
+  animation: tick-down 900ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tick-up,
+  .tick-down {
+    animation: none;
+  }
+}
+
+/* Horizontal rules inside cards, one pixel regardless of density. */
+.hairline {
+  border-color: var(--color-line);
+  border-width: 0.5px;
+}

@@ -1,0 +1,9 @@
+.next
+node_modules
+lib/api/openapi.json
+package-lock.json
+public/sw.js
+
+# The project's documents predate the app and are maintained by hand.
+*.md
+screenshots
