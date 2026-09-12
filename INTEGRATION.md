@@ -20,6 +20,7 @@ Updated 2026-09-12.
 | Contracts on Arc testnet | Deployed and verified | **Yes** |
 | API contract, typed client, mock server | Done | **Yes** |
 | Config and profile endpoints, live | Done | **Yes** |
+| Trading endpoints, live | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
 | Trading and social endpoints | Not started | Use the mock |
 | Subgraph | Not started | No |
@@ -101,7 +102,43 @@ Six are implemented against a live database. The rest answer from the mock with 
 | `POST auth/session` | Live. Send the Privy token; the account is created on first sight. |
 | `GET me`, `PATCH me` | Live. |
 | `GET users/{handle}` | Live. |
-| everything else | Mock only |
+| `POST trades/intent` | Live. Returns a quote and an unsigned transaction. |
+| `POST positions/{tokenId}/close-intent` | Live. |
+| `POST trades/{tradeId}/confirm` | Live. Verifies the receipt on-chain. |
+| `GET trades/{tradeId}`, `POST .../cancel` | Live. |
+| social routes, feed, leaderboard | Mock only |
+
+### Trading
+
+```ts
+const {intent} = await api.createTradeIntent({
+  body: {feedId, isLong: true, collateral: "2000000", thesisId: null, copiedFromTokenId: null},
+});
+
+const hash = await walletClient.sendTransaction({
+  to: intent.tx.to, data: intent.tx.data, value: 0n,
+});
+
+const {trade} = await api.confirmTrade({
+  params: {tradeId: intent.tradeId}, body: {txHash: hash},
+});
+```
+
+Four things about this flow:
+
+1. **Approve USDC first.** The vault pulls the collateral, so the user needs an ERC-20 allowance on
+   `SyntheticVault` before the first trade. The API does not build that transaction.
+2. **`intent.quote.entryPrice` is not `markPrice`.** The contract moves the price against the trader
+   by the oracle confidence. Show the entry, or the user sees a fill they did not expect.
+3. **Quotes expire after 30 seconds.** Request a fresh intent rather than reusing an old one.
+4. **If `confirm` fails or the response is lost, poll `GET trades/{tradeId}`.** The intent is
+   recorded before the transaction is built, so nothing is lost. Calling `confirm` again with the
+   same hash is safe.
+
+Rejections arrive as specific codes before the user signs anything — `PRICE_STALE`,
+`CONFIDENCE_TOO_WIDE`, `POSITION_CAP_EXCEEDED`, `OPEN_INTEREST_CAP_EXCEEDED`,
+`INSUFFICIENT_LIQUIDITY`, `INSUFFICIENT_BALANCE`, `ASSET_DISABLED`. Each has a message worth showing
+directly.
 
 **Profile stats are zeroed placeholders.** `openPositions`, `realizedPnlUsd`, `followers` and the
 rest return `0` until positions and follows exist. The fields are real and the shape will not change
@@ -375,6 +412,8 @@ Decode the revert and show a specific message. Each selector is stable.
 
 ## Changelog
 
+- **2026-09-12** — Trading is live. Intent, confirm, close, cancel and poll all run against the
+  chain; verified by opening and closing a real position on Arc testnet through the API.
 - **2026-09-12** — Configuration and profile endpoints are live against a real database. Privy
   sign-in works end to end. Everything else still answers from the mock.
 - **2026-09-12** — API contract frozen. Typed client and mock server available; 26 routes, OpenAPI
