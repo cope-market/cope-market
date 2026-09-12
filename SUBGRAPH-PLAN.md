@@ -60,6 +60,16 @@ must not.
 | **5.8** | Wire the backend | Leaderboard and profile stats read real P&L instead of returning "0" |
 | **5.9** | Verification | Both subgraphs live, the backend serving real numbers, and the standards claim demonstrable |
 
+**Workstream 5 is complete.** Three deployments live with no indexing errors:
+`erc-4626-vault-arc`, `erc-4626-vault-base` and `cope-market-arc`. The backend serves realised P&L
+and win rate from the subgraph, reconciled against `openInterest` on the contract by
+`npm run verify:subgraph`. Two guards keep the claims honest: `check:handlers`, because an unwired
+handler indexes nothing and reports no error, and `check:standardized`, because the genericity claim
+decays quietly.
+
+One thing remains outside the code. **The subgraphs repository is private, and Track 1 needs a
+public one at submission.**
+
 ## Step 5.8 in detail
 
 Two numbers currently answer "0" on purpose: `realizedPnlUsd` on a profile, and `realizedPnlUsd`
