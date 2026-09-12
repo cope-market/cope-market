@@ -21,6 +21,7 @@ Updated 2026-09-12.
 | API contract, typed client, mock server | Done | **Yes** |
 | Config and profile endpoints, live | Done | **Yes** |
 | Trading endpoints, live | Done | **Yes** |
+| Social endpoints, live | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
 | Trading and social endpoints | Not started | Use the mock |
 | Subgraph | Not started | No |
@@ -106,7 +107,40 @@ Six are implemented against a live database. The rest answer from the mock with 
 | `POST positions/{tokenId}/close-intent` | Live. |
 | `POST trades/{tradeId}/confirm` | Live. Verifies the receipt on-chain. |
 | `GET trades/{tradeId}`, `POST .../cancel` | Live. |
-| social routes, feed, leaderboard | Mock only |
+| `POST events/oembed` | Live. Tweet embeds, cached server-side. |
+| `POST theses`, `GET theses/{id}` | Live. |
+| `POST/DELETE theses/{id}/like` | Live. Idempotent. |
+| `GET/POST theses/{id}/comments` | Live. |
+| `GET feed` | Live. latest, top and following. |
+| `GET leaderboard` | Live. See the caveat below. |
+| `POST/DELETE users/{handle}/follow` | Live. |
+| `notifications`, `devices` | Mock only |
+
+### The social loop
+
+A thesis is written **before** the trade is signed, so `tokenId` is null when it is created and
+fills in when the backing trade confirms:
+
+```ts
+const {thesis} = await api.createThesis({body: {feedId, stance, title, body, tweetUrl, copiedFromThesisId: null}});
+const {intent} = await api.createTradeIntent({body: {feedId, isLong: true, collateral, thesisId: thesis.id, copiedFromTokenId: null}});
+// user signs, then confirm -- the position attaches to the thesis here
+```
+
+Copying is two calls: `createThesis` with `copiedFromThesisId`, and `createTradeIntent` with
+`copiedFromTokenId`. The first builds the social lineage, the second the on-chain attribution that
+pays the author.
+
+**Read live P&L from the chain using `thesis.tokenId`.** The API never mirrors it, so there is one
+source of truth and it is the contract.
+
+**Two numbers are honestly zero.** `realizedPnlUsd` and `winRate` need per-position results from the
+subgraph, which does not exist yet. The leaderboard therefore ranks on copies received and positions
+closed. Do not present those zeros as performance.
+
+`viewerHasLiked` and `profile.viewer` are `null` when nobody is signed in, and populated when
+somebody is — including on public routes. The typed client sends the token whenever one is
+available, so personalisation works without you doing anything.
 
 ### Trading
 
@@ -412,6 +446,9 @@ Decode the revert and show a specific message. Each selector is stable.
 
 ## Changelog
 
+- **2026-09-12** — Social layer is live: theses, tweet embeds, likes, comments, follows, ranked feed
+  and leaderboard. Verified end to end, including a thesis backed by a real position and copied by a
+  second user.
 - **2026-09-12** — Trading is live. Intent, confirm, close, cancel and poll all run against the
   chain; verified by opening and closing a real position on Arc testnet through the API.
 - **2026-09-12** — Configuration and profile endpoints are live against a real database. Privy
