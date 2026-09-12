@@ -23,8 +23,8 @@ Updated 2026-09-12.
 | Trading endpoints, live | Done | **Yes** |
 | Social endpoints, live | Done | **Yes** |
 | Price pusher | Runs manually, not yet always-on | Partly. See Market hours. |
-| Trading and social endpoints | Not started | Use the mock |
-| Subgraph | Not started | No |
+| Subgraphs, both deployed | Done | **Yes**. See Subgraphs. |
+| Leaderboard and profile P&L, served from the subgraph | Not wired yet | Returns zeros for now |
 
 **The API shapes are frozen.** Build against the mock server and the typed client. When the real
 endpoints land they answer with the same shapes, so nothing you write against the mock has to
@@ -33,6 +33,10 @@ change.
 **Chain reads stay direct.** Positions, prices, balances, liquidity-vault state and risk parameters
 are read from the contracts with viem and are deliberately not mirrored by the API. The rest of this
 document covers those calls.
+
+**History comes from the subgraph.** Anything that needs the past rather than the present — a
+trader's closed positions, realised P&L, the copy graph, a TVL or share-price chart — is a GraphQL
+query, not a chain call. There is no way to ask a contract what happened.
 
 ---
 
@@ -342,6 +346,99 @@ asset's `maxAgeSec`, the market is closed.
 
 ---
 
+## Subgraphs
+
+Two, kept apart on purpose.
+
+| Subgraph | Endpoint | Holds |
+|---|---|---|
+| ERC-4626 vault | `https://api.studio.thegraph.com/query/101383/erc-4626-vault-arc/v0.2.0` | LP deposits, withdrawals, share transfers, per-account positions, hourly and daily TVL and share price |
+| Cope Market | `https://api.studio.thegraph.com/query/101383/cope-market-arc/v0.2.0` | Positions, the copy graph, author fees, realised P&L, leaderboard inputs |
+
+The first is a standardized schema that indexes any ERC-4626 vault, so nothing Cope-specific
+appears in it. Ours is simply one of the vaults it can point at. If you want LP data, query that
+one; if you want positions or traders, query the other.
+
+Neither needs an API key at these URLs. Query them straight from the client, or through the backend
+once the leaderboard is wired.
+
+### Which one answers what
+
+```graphql
+# Cope Market: a trader's record, for a profile screen
+{
+  trader(id: "0xeeb3...") {
+    positionsOpened
+    positionsClosed
+    wins
+    losses
+    realizedPnlWad      # 1e18 USD, signed
+    copiesMade
+    copiesReceived
+    authorFeesEarned    # USDC, 6 dec
+  }
+}
+
+# Cope Market: someone's closed positions, newest first
+{
+  positions(
+    where: {author: "0xeeb3...", status_not: OPEN}
+    orderBy: closedAt
+    orderDirection: desc
+  ) {
+    tokenId
+    asset { id }        # the Pyth feed id
+    isLong
+    collateral          # USDC, 6 dec, net of the open fee
+    entryPrice          # 1e18
+    exitPrice           # 1e18
+    realizedPnlWad      # 1e18, signed
+    payout              # USDC, 6 dec
+    status              # OPEN | CLOSED | LIQUIDATED
+    copiedFrom { tokenId author { id } }
+  }
+}
+
+# ERC-4626 vault: a share-price chart
+{
+  vaultDailySnapshots(
+    where: {vault: "0x0ffabc4e80125c5742d5ed04cc1fd1b634bc3c5d"}
+    orderBy: day
+  ) {
+    day                 # unix day index
+    totalAssets         # USDC, 6 dec
+    sharePrice          # decimal string, assets per share
+    dailyDepositedAssets
+    dailyWithdrawnAssets
+  }
+}
+```
+
+### Things the subgraphs will surprise you with
+
+**Addresses are lower-case in queries and in results.** `where: {author: "0xEeb3..."}` matches
+nothing. Lower-case every address before it goes into a query, and do not compare a result to a
+checksummed string.
+
+**`totalAssets` on the vault is not live.** It is what the contract said at `lastUpdatedBlock`. The
+pool's assets move with no event — traders win and lose against it — and a subgraph only runs when
+a log arrives. For a live TVL figure, call `LiquidityVault.totalAssets()`. For a chart, use the
+snapshots.
+
+**Snapshots exist only for periods that had activity.** A quiet hour produces no row at all, so a
+chart has to carry the last value forward rather than read the gap as zero.
+
+**P&L belongs to the author, not the holder.** A position NFT can be sold. `author` is who opened
+it and never changes; `owner` is who holds it now. Rank and attribute on `author`.
+
+**A flat close is a loss.** `wins` counts strictly positive P&L, so `wins + losses ==
+positionsClosed` always holds and a win rate never counts a zero as a win.
+
+**Position ids are not token ids.** The id is the token id as 32-byte big-endian, which is what
+makes `orderBy: id` mint order. Query by `tokenId` if that is what you have.
+
+---
+
 ## Writing state
 
 ### Open a position
@@ -445,6 +542,11 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-12** — Both subgraphs deployed on Arc testnet and reconciled against the chain. The
+  standardized ERC-4626 schema also builds against two unrelated MetaMorpho vaults on Base from
+  configuration alone. Leaderboard and profile P&L still return zeros until the backend reads from
+  them.
 
 - **2026-09-12** — Social layer is live: theses, tweet embeds, likes, comments, follows, ranked feed
   and leaderboard. Verified end to end, including a thesis backed by a real position and copied by a
