@@ -17,3 +17,4 @@ playwright-report
 test-results
 .vercel
 screenshots/
+env.example
