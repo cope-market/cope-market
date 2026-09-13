@@ -12,6 +12,7 @@ import {useChainSettings} from "../chain/config";
 import {publicClient} from "../chain/client";
 import {erc20Abi} from "../chain/abi";
 import {useApproveUsdc, useSendTx} from "../chain/write";
+import type {TradeStage} from "./stages";
 
 /// Driving a trade from intent to settled position.
 ///
@@ -28,8 +29,7 @@ import {useApproveUsdc, useSendTx} from "../chain/write";
 
 export type IntentData = z.infer<typeof TradeIntent>;
 
-export type TradeStage =
-  "idle" | "approving" | "quoting" | "awaiting-signature" | "confirming" | "done" | "failed";
+export type {TradeStage} from "./stages";
 
 export interface TradeProgress {
   stage: TradeStage;
@@ -129,7 +129,7 @@ export function useTrade() {
             copiedFromTokenId: input.copiedFromTokenId,
           },
         });
-        setProgress({...IDLE, stage: "awaiting-signature", intent});
+        setProgress({...IDLE, stage: "quoted", intent});
         return intent;
       } catch (error) {
         const copy = describeApiError(error);
@@ -148,7 +148,7 @@ export function useTrade() {
           params: {tokenId: tokenId.toString()},
           body: {},
         });
-        setProgress({...IDLE, stage: "awaiting-signature", intent});
+        setProgress({...IDLE, stage: "quoted", intent});
         return intent;
       } catch (error) {
         const copy = describeApiError(error);

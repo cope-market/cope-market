@@ -10,6 +10,7 @@ import {explorerTxUrl} from "@/lib/chain/arc";
 import {confidenceBps, quoteOpen} from "@/lib/trade/quote";
 import {notionalUsd} from "@/lib/trade/quote";
 import {useTrade} from "@/lib/trade/send";
+import {isBusy} from "@/lib/trade/stages";
 import {formatBps, formatPrice, formatUsdc6, formatWad, parseUsdc6} from "@/lib/format";
 import {AmountInput} from "./AmountInput";
 import {QuoteCountdown} from "./QuoteCountdown";
@@ -88,9 +89,7 @@ export function TradeSheet(props: TradeSheetProps) {
     ? confidenceBps(market.mark.price, market.mark.conf) > BigInt(market.config.maxConfBps)
     : false;
 
-  const busy = ["approving", "quoting", "awaiting-signature", "confirming"].includes(
-    progress.stage,
-  );
+  const busy = isBusy(progress.stage);
 
   const close = useCallback(() => {
     if (busy) return;

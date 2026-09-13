@@ -7,6 +7,7 @@ import {useProtocolParams} from "@/lib/chain/hooks";
 import type {LivePosition} from "@/lib/chain/position";
 import {explorerTxUrl} from "@/lib/chain/arc";
 import {useTrade} from "@/lib/trade/send";
+import {isBusy} from "@/lib/trade/stages";
 import {formatBps, formatPrice, formatUsdc6} from "@/lib/format";
 import {PnlBadge} from "./PnlBadge";
 import {QuoteCountdown} from "./QuoteCountdown";
@@ -45,7 +46,7 @@ export function ClosePositionSheet({
     }
   }, [open, tokenId, progress.stage, requestCloseIntent]);
 
-  const busy = ["quoting", "awaiting-signature", "confirming"].includes(progress.stage);
+  const busy = isBusy(progress.stage);
 
   const dismiss = useCallback(() => {
     if (busy) return;
