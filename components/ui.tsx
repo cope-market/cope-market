@@ -111,10 +111,14 @@ export function ErrorState({
   title,
   detail,
   onRetry,
+  action,
 }: {
   title: string;
   detail: string;
   onRetry?: () => void;
+  /// A way forward for errors that retrying cannot fix. Without it a non-retryable error renders
+  /// as a message and nothing else, which is a dead end when the message asks for an action.
+  action?: {label: string; onClick: () => void};
 }) {
   return (
     <Card className="p-5 text-center">
@@ -123,6 +127,11 @@ export function ErrorState({
       {onRetry ? (
         <Button tone="quiet" onClick={onRetry} className="mt-4">
           Try again
+        </Button>
+      ) : null}
+      {action ? (
+        <Button onClick={action.onClick} className="mt-4">
+          {action.label}
         </Button>
       ) : null}
     </Card>

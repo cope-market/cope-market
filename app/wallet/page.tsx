@@ -6,6 +6,7 @@ import {AuthGate} from "@/components/AuthGate";
 import {PositionCard} from "@/components/PositionCard";
 import {ClosePositionSheet, EditBioSheet} from "@/components/lazy";
 import {SettledNotice} from "@/components/SettledNotice";
+import {CopyAddress} from "@/components/CopyAddress";
 
 import {AsOf, Button, Card, Empty, ErrorState, Pill, Row, Screen, Skeleton} from "@/components/ui";
 import {useSession} from "@/lib/auth/session";
@@ -70,7 +71,16 @@ function Wallet() {
   return (
     <Screen
       title={profile?.name ?? "Wallet"}
-      subtitle={profile ? `@${profile.handle}` : undefined}
+      subtitle={
+        profile ? (
+          <>
+            @{profile.handle}
+            {/* Where to send funds. It belongs on this screen because this is the one that says
+                how much there is, and the answer to "it is empty" is an address to top it up. */}
+            {address ? <CopyAddress address={address} className="mt-1" /> : null}
+          </>
+        ) : undefined
+      }
       action={
         <button
           onClick={() => void signOut()}

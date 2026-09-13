@@ -24,6 +24,34 @@ describe("describeApiError", () => {
     expect(noToken.retryable).toBe(false);
   });
 
+  /// The messages the server actually sends, verbatim. The case above passes against "No token
+  /// provided", which the server never says — so the missing-token branch stopped matching without
+  /// a test noticing, and a signed-out user was told their session could not be verified.
+  it("reads the server's real missing-token wording as being signed out", () => {
+    for (const message of [
+      "getMe requires a bearer token.",
+      "createSession requires a bearer token.",
+    ]) {
+      const copy = describeApiError(new ApiRequestError("UNAUTHORIZED", message, 401));
+      expect(copy.detail).toBe("You are signed out.");
+      expect(copy.retryable).toBe(false);
+    }
+  });
+
+  it("keeps a rejected token distinct from a missing one", () => {
+    const rejected = describeApiError(
+      new ApiRequestError("UNAUTHORIZED", "Access token is not valid.", 401),
+    );
+    const absent = describeApiError(
+      new ApiRequestError("UNAUTHORIZED", "getMe requires a bearer token.", 401),
+    );
+
+    // Same dead end for the user, but they are not the same fault and must not read alike.
+    expect(rejected.detail).not.toBe(absent.detail);
+    expect(rejected.detail).toBe("Your session could not be verified.");
+    expect(rejected.retryable).toBe(false);
+  });
+
   it("says a refused winning close leaves the position open", () => {
     const copy = describeApiError(new ApiRequestError("INSUFFICIENT_LIQUIDITY", "", 409));
     expect(copy.detail).toMatch(/stays open/i);

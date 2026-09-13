@@ -109,7 +109,10 @@ function unauthorizedCopy(message: string): Copy {
       retryable: true,
     };
   }
-  if (/no token|missing/i.test(message)) {
+  // The server phrases this per route — "getMe requires a bearer token." — so matching on the
+  // shape of the sentence rather than a fixed string is what keeps a signed-out user from being
+  // told their session is corrupt. Matching "no token" alone silently stopped covering this.
+  if (/no token|missing|requires a bearer token/i.test(message)) {
     return {title: "Sign in to continue", detail: "You are signed out.", retryable: false};
   }
   return {
