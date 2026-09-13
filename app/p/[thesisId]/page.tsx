@@ -189,10 +189,10 @@ export default function ThesisPage({params}: {params: Promise<{thesisId: string}
           isLong={live.position.isLong}
           thesisId={null}
           copiedFromTokenId={data.tokenId}
-          copiedFromEntryPrice={live.position.entryPrice}
           copyOf={{
             thesisId: data.id,
             title: data.title,
+            authorHandle: data.author.handle,
             stance: data.stance,
             tweetUrl: data.event?.tweetUrl ?? null,
           }}

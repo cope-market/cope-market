@@ -5,7 +5,7 @@ import Link from "next/link";
 import {useApi} from "@/lib/api/provider";
 import {useAssets} from "@/lib/api/assets";
 import {useSession} from "@/lib/auth/session";
-import {useMarket, useProtocolParams, useWallet} from "@/lib/chain/hooks";
+import {useMarket, useWallet} from "@/lib/chain/hooks";
 import {explorerTxUrl} from "@/lib/chain/arc";
 import {confidenceBps, quoteOpen} from "@/lib/trade/quote";
 import {notionalUsd} from "@/lib/trade/quote";
@@ -15,7 +15,7 @@ import {formatBps, formatPrice, formatUsdc6, formatWad, parseUsdc6} from "@/lib/
 import {AmountInput} from "./AmountInput";
 import {QuoteCountdown} from "./QuoteCountdown";
 import {Sheet} from "./Sheet";
-import {Button, Card, Pill, Row} from "./ui";
+import {Button, Card, Row} from "./ui";
 
 /// Opening a position.
 ///
@@ -43,12 +43,11 @@ export interface TradeSheetProps {
   copyOf?: {
     thesisId: string;
     title: string;
+    /// Who wrote it. A copier is following a person, so the sheet names one rather than a token id.
+    authorHandle: string;
     stance: "bullish" | "bearish";
     tweetUrl: string | null;
   } | null;
-  /// The origin's entry price, shown against the current one. A copy fills at the current price,
-  /// and presenting it as an identical fill would be a lie.
-  copiedFromEntryPrice?: bigint | null;
 }
 
 export function TradeSheet(props: TradeSheetProps) {
@@ -58,7 +57,6 @@ export function TradeSheet(props: TradeSheetProps) {
   const {data: market} = useMarket(feedId);
   const wallet = useWallet(address);
   const api = useApi();
-  const {data: params} = useProtocolParams();
   const {progress, reset, requestIntent, signAndConfirm} = useTrade();
   const [postingCopy, setPostingCopy] = useState(false);
 
@@ -126,7 +124,6 @@ export function TradeSheet(props: TradeSheetProps) {
           overCap={overCap}
           confTooWide={confTooWide}
           balance={wallet.data?.usdc}
-          authorFeeBps={params?.authorFeeBps ?? null}
           authenticated={authenticated}
           error={progress.error}
           busy={busy || postingCopy}
@@ -189,13 +186,11 @@ function Compose({
   overCap,
   confTooWide,
   balance,
-  authorFeeBps,
   authenticated,
   error,
   busy,
   onSubmit,
   copiedFromTokenId,
-  copiedFromEntryPrice,
   copyOf,
 }: TradeSheetProps & {
   symbol: string;
@@ -207,14 +202,25 @@ function Compose({
   overCap: boolean;
   confTooWide: boolean;
   balance: bigint | undefined;
-  /// From the chain. Null until it has been read; the copy says "a share" until then rather than
-  /// naming a number it has not confirmed.
-  authorFeeBps: number | null;
   authenticated: boolean;
   error: {title: string; detail: string} | null;
   busy: boolean;
   onSubmit: () => void;
 }) {
+  /// Two audiences, two levels of detail, on purpose.
+  ///
+  /// Someone opening a position from scratch has chosen a market, a side and a size, and every
+  /// figure below — mark, entry skew, fee, units — is something they are deciding with. Someone
+  /// copying has decided one thing: that they believe a person. Asking them to read a price
+  /// preview to act on that is asking them to learn a discipline in order to trust someone who
+  /// already has it, which is the barrier this product exists to remove.
+  ///
+  /// So the copy path shows who is being backed and asks for an amount. That is the whole screen,
+  /// and it is not an oversight or an unfinished state: this sheet deliberately withholds
+  /// mechanics a copier does not need. Do not restore them here. If a number turns out to be worth
+  /// a copier's attention, it earns its place by being understandable without the rest — not by
+  /// arriving as part of the trader's view.
+  const copying = copiedFromTokenId != null;
   const tradeable = market?.market.tradeable ?? false;
   const enough =
     collateral !== null && collateral > 0n && (balance === undefined || collateral <= balance);
@@ -262,31 +268,24 @@ function Compose({
         </Card>
       ) : null}
 
-      <AmountInput value={amount} onChange={setAmount} balance={balance} disabled={!tradeable} />
-
-      {copiedFromTokenId ? (
-        <Card className="mt-4 p-3.5">
-          <div className="flex items-center justify-between">
-            <Pill tone="accent">Copying #{copiedFromTokenId}</Pill>
-          </div>
-          <dl className="mt-2.5 space-y-0.5">
-            {copiedFromEntryPrice ? (
-              <Row label="Their entry" value={formatPrice(copiedFromEntryPrice)} />
-            ) : null}
-            <Row label="Your entry" value={preview ? formatPrice(preview.entryPrice) : "—"} />
-          </dl>
-          <p className="mt-2 text-[0.6875rem] leading-relaxed text-dim">
-            A copy opens at the current price, not at theirs.{" "}
-            {authorFeeBps === null
-              ? "A share of any profit goes"
-              : `${formatBps(authorFeeBps)} of any profit goes`}{" "}
-            to the author when you close; a loss costs them nothing.
-            {copyOf ? " This also posts to your feed, crediting the thesis you copied." : ""}
+      {copying ? (
+        <div className="mb-4">
+          <p className="text-[0.75rem] text-dim">
+            Copying {copyOf ? `@${copyOf.authorHandle}` : `position #${copiedFromTokenId}`}
           </p>
-        </Card>
+          {copyOf ? (
+            <p className="mt-0.5 text-[0.9375rem] font-semibold leading-snug">{copyOf.title}</p>
+          ) : null}
+        </div>
       ) : null}
 
-      {preview && market ? (
+      {copying ? (
+        <p className="mb-2 text-[0.875rem] font-medium">How much do you want to put in?</p>
+      ) : null}
+
+      <AmountInput value={amount} onChange={setAmount} balance={balance} disabled={!tradeable} />
+
+      {preview && market && !copying ? (
         <div className="mt-4 space-y-0.5 border-t border-line pt-3">
           <Row label="Mark" value={formatPrice(market.mark.price)} />
           <Row
@@ -331,7 +330,11 @@ function Compose({
             tone={isLong ? "long" : "short"}
             className="w-full"
           >
-            {busy ? "Getting a quote…" : `${isLong ? "Long" : "Short"} ${symbol}`}
+            {busy
+              ? "Getting a quote…"
+              : copying
+                ? "Copy this trade"
+                : `${isLong ? "Long" : "Short"} ${symbol}`}
           </Button>
         ) : (
           <Link href="/login" className="block">
