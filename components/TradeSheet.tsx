@@ -2,10 +2,10 @@
 
 import {useCallback, useMemo, useState} from "react";
 import Link from "next/link";
+import {useApi} from "@/lib/api/provider";
 import {useAssets} from "@/lib/api/assets";
 import {useSession} from "@/lib/auth/session";
-import {useMarket} from "@/lib/chain/hooks";
-import {useWallet} from "@/lib/chain/hooks";
+import {useMarket, useProtocolParams, useWallet} from "@/lib/chain/hooks";
 import {explorerTxUrl} from "@/lib/chain/arc";
 import {confidenceBps, quoteOpen} from "@/lib/trade/quote";
 import {notionalUsd} from "@/lib/trade/quote";
@@ -33,6 +33,18 @@ export interface TradeSheetProps {
   thesisId?: string | null;
   /// The origin position when this is a copy. The contract pays its author a share of any profit.
   copiedFromTokenId?: string | null;
+  /// The origin thesis, when the copy is made from one.
+  ///
+  /// Copying is two separate acts and both have to happen: `copiedFromTokenId` carries the on-chain
+  /// attribution that pays the author, and this carries the social lineage. Without it the copy
+  /// never appears in the copier's feed or profile and the copy graph has a hole in it, which is
+  /// the thing the whole feature exists to show.
+  copyOf?: {
+    thesisId: string;
+    title: string;
+    stance: "bullish" | "bearish";
+    tweetUrl: string | null;
+  } | null;
   /// The origin's entry price, shown against the current one. A copy fills at the current price,
   /// and presenting it as an identical fill would be a lie.
   copiedFromEntryPrice?: bigint | null;
@@ -44,7 +56,10 @@ export function TradeSheet(props: TradeSheetProps) {
   const {address, authenticated} = useSession();
   const {data: market} = useMarket(feedId);
   const wallet = useWallet(address);
+  const api = useApi();
+  const {data: params} = useProtocolParams();
   const {progress, reset, requestIntent, signAndConfirm} = useTrade();
+  const [postingCopy, setPostingCopy] = useState(false);
 
   const [amount, setAmount] = useState("");
   const collateral = parseUsdc6(amount);
@@ -112,18 +127,46 @@ export function TradeSheet(props: TradeSheetProps) {
           overCap={overCap}
           confTooWide={confTooWide}
           balance={wallet.data?.usdc}
+          authorFeeBps={params?.authorFeeBps ?? null}
           authenticated={authenticated}
           error={progress.error}
-          busy={busy}
+          busy={busy || postingCopy}
           onSubmit={() => {
             if (collateral === null) return;
-            void requestIntent({
-              feedId,
-              isLong,
-              collateral,
-              thesisId: props.thesisId ?? null,
-              copiedFromTokenId: props.copiedFromTokenId ?? null,
-            });
+            void (async () => {
+              // The lineage thesis is written here rather than when the sheet opens, so backing
+              // out does not leave a post with no position behind it.
+              let thesisId = props.thesisId ?? null;
+              if (props.copyOf) {
+                setPostingCopy(true);
+                try {
+                  const {thesis} = await api.createThesis({
+                    body: {
+                      feedId,
+                      stance: props.copyOf.stance,
+                      title: `Copying: ${props.copyOf.title}`,
+                      body: "",
+                      tweetUrl: props.copyOf.tweetUrl,
+                      copiedFromThesisId: props.copyOf.thesisId,
+                    },
+                  });
+                  thesisId = thesis.id;
+                } catch {
+                  // The trade is still worth making, and the contract still pays the author. Only
+                  // the social half is lost, so it is not worth blocking on.
+                } finally {
+                  setPostingCopy(false);
+                }
+              }
+
+              await requestIntent({
+                feedId,
+                isLong,
+                collateral,
+                thesisId,
+                copiedFromTokenId: props.copiedFromTokenId ?? null,
+              });
+            })();
           }}
           onSideChange={onSideChange}
         />
@@ -147,12 +190,14 @@ function Compose({
   overCap,
   confTooWide,
   balance,
+  authorFeeBps,
   authenticated,
   error,
   busy,
   onSubmit,
   copiedFromTokenId,
   copiedFromEntryPrice,
+  copyOf,
 }: TradeSheetProps & {
   symbol: string;
   market: Market;
@@ -163,6 +208,9 @@ function Compose({
   overCap: boolean;
   confTooWide: boolean;
   balance: bigint | undefined;
+  /// From the chain. Null until it has been read; the copy says "a share" until then rather than
+  /// naming a number it has not confirmed.
+  authorFeeBps: number | null;
   authenticated: boolean;
   error: {title: string; detail: string} | null;
   busy: boolean;
@@ -229,8 +277,12 @@ function Compose({
             <Row label="Your entry" value={preview ? formatPrice(preview.entryPrice) : "—"} />
           </dl>
           <p className="mt-2 text-[0.6875rem] leading-relaxed text-dim">
-            A copy opens at the current price, not at theirs. A tenth of any profit goes to the
-            author when you close; a loss costs them nothing.
+            A copy opens at the current price, not at theirs.{" "}
+            {authorFeeBps === null
+              ? "A share of any profit goes"
+              : `${formatBps(authorFeeBps)} of any profit goes`}{" "}
+            to the author when you close; a loss costs them nothing.
+            {copyOf ? " This also posts to your feed, crediting the thesis you copied." : ""}
           </p>
         </Card>
       ) : null}

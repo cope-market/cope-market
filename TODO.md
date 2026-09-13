@@ -59,6 +59,29 @@ Privy signing to work.
 - [x] **E2E must run against a production build.** Next's dev chunk loading is cancelled by WebKit,
       so every page rendered its shell and never hydrated. The built output is fine.
 
+## 1c. Found by auditing the list itself — fixed
+
+Answering "is everything captured?" turned up four things the list did not name.
+
+- [x] **Copying never built the social lineage.** The Copy button passed `copiedFromTokenId` — the
+      on-chain attribution that pays the author — but never called `createThesis` with
+      `copiedFromThesisId`. `INTEGRATION.md` is explicit that copying is two calls, and
+      `ARCHITECTURE.md` §4.3 says a lightweight thesis is auto-created so the copy shows up in the
+      copier's feed and profile. Without it every copy made through our UI had a null
+      `copiedFromThesisId`, the "Copy" pill never appeared, and the copy graph — the centrepiece of
+      the Graph submission — had a hole in it exactly where the demo points. Now written on submit,
+      not on open, so backing out leaves no post with no position behind it; and a failure to post
+      it does not block the trade, because the contract still pays the author either way.
+- [x] **No `error.tsx` or `not-found.tsx`.** A runtime error or a bad URL fell through to Next's
+      default page: unstyled, light, and jarring in a dark app. Added both, plus a `global-error`
+      that carries its own markup for the case where the root layout itself fails.
+- [x] **The author fee was prose, not a reading.** Three components said "a tenth of any profit"
+      while `liquidationThresholdBps` two files away was carefully read from the chain. All three
+      now read `authorFeeBps`, and say "a share" until it has answered rather than naming a number
+      they have not confirmed.
+- [x] **No way to reach your own public profile.** The wallet is the account screen; the profile is
+      what someone else reads before copying you. Linked.
+
 ## 1b. Pointing at the live backend — done
 
 - [x] `npm run api:sync` against their updated client.

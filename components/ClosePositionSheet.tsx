@@ -3,6 +3,7 @@
 import {useCallback, useEffect} from "react";
 import {useAssets} from "@/lib/api/assets";
 import {useSession} from "@/lib/auth/session";
+import {useProtocolParams} from "@/lib/chain/hooks";
 import type {LivePosition} from "@/lib/chain/position";
 import {explorerTxUrl} from "@/lib/chain/arc";
 import {useTrade} from "@/lib/trade/send";
@@ -33,6 +34,7 @@ export function ClosePositionSheet({
 }) {
   const {symbolFor} = useAssets();
   const {address} = useSession();
+  const {data: params} = useProtocolParams();
   const {progress, reset, requestCloseIntent, signAndConfirm} = useTrade();
 
   const tokenId = live?.position.tokenId;
@@ -125,7 +127,9 @@ export function ClosePositionSheet({
                   <Row
                     label="To the author"
                     value={`${formatUsdc6(quote.authorFee, {min: 2, max: 6})} USDC`}
-                    hint="a tenth of the profit"
+                    hint={
+                      params ? `${formatBps(params.authorFeeBps)} of the profit` : "of the profit"
+                    }
                   />
                 ) : null}
                 <Row

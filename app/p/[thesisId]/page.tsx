@@ -190,6 +190,12 @@ export default function ThesisPage({params}: {params: Promise<{thesisId: string}
           thesisId={null}
           copiedFromTokenId={data.tokenId}
           copiedFromEntryPrice={live.position.entryPrice}
+          copyOf={{
+            thesisId: data.id,
+            title: data.title,
+            stance: data.stance,
+            tweetUrl: data.event?.tweetUrl ?? null,
+          }}
         />
       ) : null}
 

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import {useAssets} from "@/lib/api/assets";
 import type {LivePosition} from "@/lib/chain/position";
-import {formatPrice, formatUsdc6, formatWad} from "@/lib/format";
+import {formatBps, formatPrice, formatUsdc6, formatWad} from "@/lib/format";
 import {Card, Pill} from "./ui";
 import {PnlBadge} from "./PnlBadge";
 import {LiquidationRisk} from "./LiquidationRisk";
@@ -87,7 +87,8 @@ export function PositionCard({
           <Link href={`/p/token/${position.copiedFromId}`} className="text-accent">
             #{String(position.copiedFromId)}
           </Link>
-          . A tenth of any profit goes to its author on close; a loss costs them nothing.
+          . {params ? formatBps(params.authorFeeBps) : "A share"} of any profit goes to its author
+          on close; a loss costs them nothing.
         </p>
       ) : null}
 

@@ -218,7 +218,12 @@ function Wallet() {
         </AsOf>
       ) : null}
 
-      <p className="mt-2 text-[0.6875rem] text-dim">
+      <p className="mt-2 flex gap-4 text-[0.6875rem]">
+        {profile ? (
+          <Link href={`/u/${profile.handle}`} className="text-accent">
+            Your public profile →
+          </Link>
+        ) : null}
         <Link href="/markets" className="text-accent">
           Browse markets →
         </Link>
