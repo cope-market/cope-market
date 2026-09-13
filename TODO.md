@@ -109,9 +109,14 @@ Answering "is everything captured?" turned up four things the list did not name.
 - [x] Local config exists — the Privy app id is in the build.
 - [x] Privy allowed origins — `http://localhost:3000` is allowlisted (visible in Privy's own CSP).
 - [x] `BACKEND_ORIGIN` pointed at the tunnel.
-- [ ] **Privy supported chains** — add Arc testnet (5042002, `https://rpc.testnet.arc.io`, native
-      USDC 18-dec). Still unverified, and without it the embedded wallet cannot sign for Arc at all
-      (risk R8). This is the single thing blocking a real trade.
+- [x] ~~Privy supported chains — add Arc testnet.~~ **Wrong item; I had this backwards.** Privy's
+      served app config has no chain allowlist, so supported chains are purely a client concern and
+      `app/providers.tsx` already declares `supportedChains: [arcTestnet]`. Nothing to do in the
+      dashboard for this.
+- [x] **Embedded wallet creation is on.** Verified in the config Privy serves the browser:
+      `create_on_login` is `users-without-wallets` for both the top level and ethereum, Solana left
+      off. Both recovery prompts are off too, so nothing interrupts the sign-in flow. Chains never
+      needed a dashboard change — they are code-only and already set.
 - [ ] **A funded Arc testnet account** for the signed-in wallet, from `faucet.circle.com`.
 - [ ] *If we want E2E on the built server:* add `http://localhost:3100` to Privy's allowed origins.
       Not needed for the current suite, which runs signed out on purpose. Their API CORS does not
@@ -120,7 +125,12 @@ Answering "is everything captured?" turned up four things the list did not name.
 
 ## 3. Verify once signing works
 
-- [ ] Sign in end to end: X login → embedded wallet → `POST auth/session` → real account.
+- [ ] **Sign in end to end — needs you, it needs a real X account.** Dev server is up on
+      `http://localhost:3000` (the allowlisted origin; the API proxy is answering). Sign in with X
+      and check, in order: the Privy modal completes, the wallet screen shows an address rather
+      than the signed-out card, and the spendable balance renders. If the address is missing, the
+      dashboard toggle did not take effect and `createWallet()` did not cover it — tell me and I
+      will look at `mode: "user-controlled-server-wallets-only"`, the one field I could not explain.
 - [ ] Open a long and a short on BTC; watch the live P&L move. **Ready now — BTC is open.**
 - [ ] Close both; assert the payout matches `lib/trade/pnl.ts` to the base unit.
 - [ ] Copy from the second account; confirm a profitable close pays the author on-chain.

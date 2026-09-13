@@ -1,9 +1,15 @@
 "use client";
 
-import {createContext, useCallback, useContext} from "react";
+import {createContext, useCallback, useContext, useEffect, useRef} from "react";
 import type {ReactNode} from "react";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
-import {getEmbeddedConnectedWallet, useLogout, usePrivy, useWallets} from "@privy-io/react-auth";
+import {
+  getEmbeddedConnectedWallet,
+  useCreateWallet,
+  useLogout,
+  usePrivy,
+  useWallets,
+} from "@privy-io/react-auth";
 import type {Address} from "viem";
 import {useApi} from "../api/provider";
 import type {Profile} from "../api/schema/entities";
@@ -78,6 +84,27 @@ function usePrivySession(): Session {
 
   const wallet = getEmbeddedConnectedWallet(wallets);
   const address = wallet?.address as Address | undefined;
+
+  // Creating the wallet ourselves when the user does not have one.
+  //
+  // The provider asks for `createOnLogin: "users-without-wallets"`, but that is also a dashboard
+  // setting and this app's served config currently reports embedded wallet creation as off. A
+  // signed-in user with no wallet cannot sign anything, which looks like the app being broken
+  // rather than a toggle being unset — so ask for one explicitly rather than depending on it.
+  //
+  // Attempted once per session. Privy rejects a second wallet for the same user, and retrying on
+  // every render would be a request loop.
+  const {createWallet} = useCreateWallet();
+  const requested = useRef(false);
+
+  useEffect(() => {
+    if (!ready || !authenticated || wallet || requested.current) return;
+    requested.current = true;
+    void createWallet().catch(() => {
+      // Already has one, or creation is disallowed for this account. Either way the interface
+      // shows the signed-in-without-a-wallet state, which is the honest thing to show.
+    });
+  }, [ready, authenticated, wallet, createWallet]);
 
   const {
     data: profile,
