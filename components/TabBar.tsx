@@ -3,14 +3,18 @@
 import Link from "next/link";
 import {usePathname} from "next/navigation";
 
-/// Five destinations, fixed to the bottom where a thumb reaches. The bar sits above the home
+/// Four destinations, fixed to the bottom where a thumb reaches. The bar sits above the home
 /// indicator on iOS, which is what `env(safe-area-inset-bottom)` is for.
+///
+/// The liquidity pool is deliberately not among them. It is counterparty to every position and the
+/// team seeds it, so supplying it is not something a trader here does — putting it in the bar asked
+/// beginners to have an opinion about a vault before they had one about a market. `/lp` still
+/// works; it is reached by URL, which is the right amount of effort for the people who want it.
 
 const TABS = [
   {href: "/feed", label: "Feed", icon: FeedIcon},
   {href: "/markets", label: "Markets", icon: MarketsIcon},
   {href: "/leaderboard", label: "Board", icon: BoardIcon},
-  {href: "/lp", label: "Pool", icon: PoolIcon},
   {href: "/wallet", label: "Wallet", icon: WalletIcon},
 ] as const;
 
@@ -122,18 +126,6 @@ function BoardIcon({active}: IconProps) {
         rx="1"
         fill={active ? "currentColor" : "none"}
         fillOpacity="0.2"
-      />
-    </>,
-  );
-}
-
-function PoolIcon({active}: IconProps) {
-  return frame(
-    <>
-      <path
-        d="M12 3s6 6.4 6 10a6 6 0 1 1-12 0c0-3.6 6-10 6-10z"
-        fill={active ? "currentColor" : "none"}
-        fillOpacity="0.18"
       />
     </>,
   );
