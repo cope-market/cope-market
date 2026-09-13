@@ -46,6 +46,43 @@ against the contract. You no longer have to special-case them.
 
 ---
 
+## A live backend you can point at
+
+A real backend — not the mock — is running on Lajos's machine and tunnelled. It has Postgres behind
+it, the price pusher keeping feeds fresh, and the liquidation keeper running.
+
+```
+NEXT_PUBLIC_API_BASE_URL=https://duty-concierge-semester.ngrok-free.dev/api/v1
+```
+
+Then `npm run api:sync`, because the typed client changed. Nothing else: no header to add, no proxy
+to configure.
+
+Two things were in the way and are now fixed in the backend, so you do not have to work around
+either.
+
+**CORS.** There was none. Every request carries an `authorization` header, which makes even a GET
+preflighted, so the browser refused each call before sending it. `http://localhost:3000` is on the
+allowlist; tell us if you need another origin, and note that a different port is a different origin.
+
+**ngrok's interstitial.** The free tier answers browser-looking requests with an HTML warning page
+instead of proxying them, so the API returned `text/plain` and the client failed parsing JSON it
+never received. curl looked perfect the whole time. The typed client now sends ngrok's opt-out
+header automatically when the base URL is a tunnel host, so this is invisible to you — but it is
+why `npm run api:sync` matters before you try.
+
+The tunnel URL changes whenever it restarts. If calls start failing, ask for the current one rather
+than assuming the backend is down.
+
+### What is real and what is not
+
+Everything the API serves is real: Postgres, the chain, both subgraphs. Sign-in is real Privy
+against the real app id, so you need the origin allowlisted in the Privy dashboard — that part is
+still on Lajos.
+
+Test tokens are **off**. `Bearer test:did:privy:...` returns 401. The service is reachable from the
+internet, and that flag mints a session for any Privy id without a password.
+
 ## Using the API
 
 Repository: [cope-market/backend](https://github.com/cope-market/backend).
@@ -604,6 +641,10 @@ Decode the revert and show a specific message. Each selector is stable.
 ---
 
 ## Changelog
+
+- **2026-09-13** — A real backend is live behind a tunnel, with Postgres, the price pusher and the
+  liquidation keeper running. CORS added; the typed client now handles ngrok's interstitial by
+  itself. Point `NEXT_PUBLIC_API_BASE_URL` at it and run `npm run api:sync`.
 
 - **2026-09-12** — The price pusher is a real service with a heartbeat, a single-instance lock, an
   interval checked against `maxAgeSec`, and a freshness check that judges a push by whether the
