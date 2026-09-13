@@ -6,6 +6,8 @@ import type {LivePosition} from "@/lib/chain/position";
 import {formatPrice, formatUsdc6, formatWad} from "@/lib/format";
 import {Card, Pill} from "./ui";
 import {PnlBadge} from "./PnlBadge";
+import {LiquidationRisk} from "./LiquidationRisk";
+import {useProtocolParams} from "@/lib/chain/hooks";
 
 /// One open position, valued against the current mark.
 
@@ -20,6 +22,7 @@ export function PositionCard({
 }) {
   const {position, market, quote} = live;
   const {symbolFor} = useAssets();
+  const {data: params} = useProtocolParams();
   const isCopy = position.copiedFromId > 0n;
 
   return (
@@ -64,6 +67,19 @@ export function PositionCard({
           <dd className="num mt-0.5 text-ink">{formatWad(position.units, {min: 2, max: 6})}</dd>
         </div>
       </dl>
+
+      {quote && params ? (
+        <LiquidationRisk
+          input={{
+            isLong: position.isLong,
+            units: position.units,
+            entryPrice: position.entryPrice,
+            collateral: position.collateral,
+            thresholdBps: params.liquidationThresholdBps,
+          }}
+          pnlWad={quote.pnlWad}
+        />
+      ) : null}
 
       {isCopy ? (
         <p className="mt-3 text-[0.6875rem] leading-relaxed text-dim">

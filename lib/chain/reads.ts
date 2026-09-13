@@ -179,6 +179,43 @@ export async function readPosition(
   return (await readPositions(client, contracts, [tokenId])).get(tokenId.toString()) ?? null;
 }
 
+/// Protocol-level parameters, as opposed to the per-asset ones in `assetConfig`.
+///
+/// Read rather than assumed: the owner can change any of them without a deploy, and a number baked
+/// into the interface would then be a lie the user acts on.
+export interface ProtocolParams {
+  /// Share of a copy's profit paid to the origin author. 1000 = 10%.
+  authorFeeBps: number;
+  /// Share of collateral that must be lost before a position can be liquidated. 9000 = 90%.
+  liquidationThresholdBps: number;
+  /// Share of collateral paid to whoever calls `liquidate`. 100 = 1%.
+  liquidationRewardBps: number;
+}
+
+export async function readProtocolParams(
+  client: PublicClient,
+  contracts: ContractAddresses,
+): Promise<ProtocolParams> {
+  const [authorFeeBps, liquidationThresholdBps, liquidationRewardBps] = await client.multicall({
+    allowFailure: false,
+    contracts: [
+      {address: contracts.syntheticVault, abi: syntheticVaultAbi, functionName: "authorFeeBps"},
+      {
+        address: contracts.syntheticVault,
+        abi: syntheticVaultAbi,
+        functionName: "liquidationThresholdBps",
+      },
+      {
+        address: contracts.syntheticVault,
+        abi: syntheticVaultAbi,
+        functionName: "liquidationRewardBps",
+      },
+    ] as const,
+  });
+
+  return {authorFeeBps, liquidationThresholdBps, liquidationRewardBps};
+}
+
 export interface WalletState {
   /// 6 decimals. The spendable balance, and what every contract amount is denominated in.
   usdc: bigint;

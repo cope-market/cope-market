@@ -1,8 +1,9 @@
 "use client";
 
-import {useMemo} from "react";
+import {useEffect, useMemo} from "react";
 import type {Hex} from "viem";
 import {useHeldPositions} from "../graph/hooks";
+import type {IndexedPosition} from "../graph/cope";
 import {quoteCloseAtMark} from "../trade/pnl";
 import type {CloseQuote} from "../trade/pnl";
 import {useMarkets, usePositions} from "./hooks";
@@ -29,14 +30,30 @@ export function useLivePositions(address: string | undefined) {
   const positions = usePositions(tokenIds);
   const markets = useMarkets();
 
+  /// Rows the indexer still lists as open whose token the contract no longer knows about.
+  ///
+  /// A position can now be closed by a liquidation keeper rather than by its owner, so this is not
+  /// only ever the user's own doing — and a card silently disappearing would be the worst way to
+  /// find that out.
+  const settled = useMemo((): IndexedPosition[] => {
+    if (!positions.data || !held.data) return [];
+    return held.data.filter((row) => positions.data.get(row.tokenId.toString()) === null);
+  }, [held.data, positions.data]);
+
+  // The indexer agrees within a block or two, at which point the row leaves `positionsHeldBy` and
+  // the notice goes with it. Asking again is what makes it temporary rather than permanent.
+  const refetchHeld = held.refetch;
+  useEffect(() => {
+    if (settled.length > 0) void refetchHeld();
+  }, [settled.length, refetchHeld]);
+
   const live = useMemo((): LivePosition[] => {
     if (!positions.data) return [];
 
     return (
       tokenIds
         .map((tokenId) => positions.data.get(tokenId.toString()))
-        // A token the contract no longer knows about has been closed since the indexer last ran.
-        // Dropping it is right: it is not an error, it is a position that is over.
+        // A token the contract no longer knows about is handled above, as `settled`.
         .filter((position): position is Position => position !== null && position !== undefined)
         .map((position) => {
           const market = markets.data?.rows.find(
@@ -67,6 +84,7 @@ export function useLivePositions(address: string | undefined) {
 
   return {
     positions: live,
+    settled,
     isLoading: held.isLoading || positions.isLoading,
     isError: held.isError,
     error: held.error,

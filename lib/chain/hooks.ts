@@ -9,6 +9,7 @@ import {
   readMarkets,
   readOpenInterest,
   readPositions,
+  readProtocolParams,
   readVault,
   readWallet,
 } from "./reads";
@@ -48,6 +49,19 @@ export function useOpenInterest(rows: readonly MarketRow[] | undefined) {
     queryFn: () => readOpenInterest(publicClient(), chain.contracts, rows ?? []),
     enabled: (rows?.length ?? 0) > 0,
     refetchInterval: PRICE_POLL_MS * 2,
+  });
+}
+
+/// Author fee and liquidation parameters. They change only when the owner changes them, so this is
+/// cached for a long time; it is still read rather than hard-coded, which is what INTEGRATION.md
+/// asks for.
+export function useProtocolParams() {
+  const chain = useChainSettings();
+
+  return useQuery({
+    queryKey: ["protocol-params", chain.contracts.syntheticVault],
+    queryFn: () => readProtocolParams(publicClient(), chain.contracts),
+    staleTime: 10 * 60_000,
   });
 }
 

@@ -9,7 +9,7 @@ import {ASSET_CLASS_LABEL, useAssets} from "@/lib/api/assets";
 import {useMarkets} from "@/lib/chain/hooks";
 import {AuthGate} from "@/components/AuthGate";
 import {MarketBadge} from "@/components/MarketBadge";
-import {TradeSheet} from "@/components/TradeSheet";
+import {TradeSheet} from "@/components/lazy";
 import {TweetEmbed} from "@/components/TweetEmbed";
 import {Button, Card, Screen} from "@/components/ui";
 import {formatPrice} from "@/lib/format";

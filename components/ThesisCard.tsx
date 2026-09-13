@@ -27,7 +27,7 @@ export function ThesisCard({thesis, embed = false}: {thesis: ThesisData; embed?:
   return (
     <Card className="p-4">
       <div className="flex items-center gap-2.5">
-        <Link href={`/u/${thesis.author.handle}`}>
+        <Link href={`/u/${thesis.author.handle}`} aria-label={`${thesis.author.name}'s profile`}>
           <Avatar src={thesis.author.avatarUrl} name={thesis.author.name} />
         </Link>
         <div className="min-w-0 flex-1">
@@ -49,7 +49,7 @@ export function ThesisCard({thesis, embed = false}: {thesis: ThesisData; embed?:
           {thesis.tokenId === null ? <Pill tone="warn">No position</Pill> : null}
         </div>
 
-        <h3 className="mt-2 text-[1rem] font-semibold leading-snug">{thesis.title}</h3>
+        <h2 className="mt-2 text-[1rem] font-semibold leading-snug">{thesis.title}</h2>
         {thesis.body ? (
           <p className="mt-1 line-clamp-3 text-[0.875rem] leading-relaxed text-muted">
             {thesis.body}

@@ -21,9 +21,6 @@ export const viewport: Viewport = {
   themeColor: "#08090b",
   width: "device-width",
   initialScale: 1,
-  // A trading interface with a double-tap zoom is a trading interface that fires trades by
-  // accident. Pinch zoom stays available; the browser's tap-to-zoom does not.
-  maximumScale: 1,
   viewportFit: "cover",
 };
 

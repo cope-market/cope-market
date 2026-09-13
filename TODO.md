@@ -1,77 +1,111 @@
-# TODO
+# TODO — PWA
 
-Working list for the PWA. Cross items out as they land.
+Our list. Contracts, backend, subgraphs, the price pusher and the liquidation keeper belong to the
+other dev; nothing here asks them to do anything, it only notes what we cannot verify until their
+services are up.
 
-**Status:** every screen is built and renders against the live chain, both subgraphs and the
-backend mock. `npm run check` is green (types, lint, format, 86 tests, API drift). Production build
-succeeds and the service worker registers. Nothing has been committed yet.
+**Status:** every screen is built. `npm run check` is green (types, lint, format, 97 unit tests,
+API drift) and `npm run e2e` is green — 38 tests across WebKit/iPhone and Chromium/desktop.
+Lighthouse: performance 92, accessibility 100, SEO 100.
 
-**The one thing blocking everything else:** all four price feeds are stale, so no trade can open or
-close. The pusher needs two keys from you.
+**BTC/USD is live again** — their pusher is running, so crypto is tradeable. FX, metals and
+equities are correctly closed; it is Sunday. What has still not happened is a trade through the UI,
+which needs Privy signing to work.
 
 ---
 
-## 1. Blocked on you
+## 1. Client work, no dependencies
 
-- [ ] **`PYTH_API_KEY`** — Hermes key for `contracts/script/price-pusher.sh`.
-- [ ] **A pusher key.** `PushOracle.owner()` is `0xeeb3e0999D01f0d1Ed465513E414725a357F6ae4`;
-      pushing needs an address allowlisted via `setPusher`. Either that key, or allowlist a fresh
-      one. It needs testnet USDC for gas from `faucet.circle.com`.
-- [ ] **Privy dashboard, app `cmtydcbsd02f00cjkdaadli5p`** — only you can change these:
-  - [ ] add `http://localhost:3000` (and later the Vercel origin) to allowed origins
-  - [ ] add Arc testnet (5042002, `https://rpc.testnet.arc.io`, native USDC 18-dec) to supported
-        chains — without this the embedded wallet cannot sign an Arc transaction at all (risk R8)
-- [ ] **Backend base URL** once the other dev deploys, plus a funded test account on it.
-- [ ] **`cp env.example .env.local`** — I can't write `.env*` files.
-- [ ] *Nice to have:* a second X account and a second funded testnet key, so the copy flow is
-      demonstrated with two real users rather than described.
-- [ ] *Separate from the app:* `cope-market/subgraphs` is private, and The Graph's Track 1 needs a
-      public repo at submission (noted in `SUBGRAPH-PLAN.md`).
+**Liquidation** — done.
 
-## 2. Unblocked the moment those land
+- [x] `liquidationThresholdBps()` and `liquidationRewardBps()` read from the chain, not hard-coded.
+- [x] Liquidation risk on every open position: the exit price it happens at, how far along it is,
+      and a warning once past 60%. Quiet until it matters.
+- [x] `liquidationReward` and `closedBy` queried; a liquidated position shows the liquidator's cut.
+- [x] A position that disappears mid-session now says so instead of the card vanishing.
+- [x] `lib/trade/liquidation.ts` with 11 tests, cross-checked against `quoteClose`.
 
-- [ ] Run `price-pusher.sh --interval 60 --stamp-now` and confirm markets go Live.
-- [ ] Verify sign-in end to end: X login → embedded wallet → `POST auth/session` → real account.
-- [ ] Open a long and a short on BTC from the app; check the live P&L moves.
+**Bugs and loose ends** — done.
+
+- [x] `/p/token/[tokenId]` built — the dangling link now lands on a real page, which also covers a
+      copied position whose origin has no thesis.
+- [x] Abandoned quotes call `cancelTrade` on the way out.
+- [x] Bio editing on the wallet screen, via `PATCH me`.
+- [x] Bundle: `/markets/[feedId]` went from 544 kB to 249 kB by lazy-loading the trade sheet.
+
+**Testing** — done.
+
+- [x] Playwright: 38 tests over the signed-out shell, markets, failure modes and PWA basics.
+- [x] Lighthouse. Note: Lighthouse 12 removed the PWA category, so installability is asserted by
+      our own tests instead — manifest, icon sizes, maskable icon, viewport, and that no `/api/`
+      response is ever cached.
+- [x] Screenshots re-taken from the production build.
+
+**Found while doing the above, and fixed:**
+
+- [x] **The service worker was caching the API.** Serwist's default runtime caching puts every
+      same-origin `/api/` GET behind NetworkFirst with a 24-hour expiry, and our exclusion list
+      only named four prefixes. A leaderboard that failed because the subgraph was down would have
+      fallen back to a day-old ranking — exactly what the design forbids. All `/api/` is now
+      NetworkOnly, and a test asserts the cache stays empty of it.
+- [x] **The app crashed without a Privy app id**, despite claiming to run signed out: `useSession`
+      called `usePrivy()` unconditionally. Session state now comes from a provider, chosen once at
+      the tree root.
+- [x] **Accessibility was 83.** `--color-dim` failed contrast at small sizes (3.4:1, now 4.8:1);
+      the viewport blocked pinch-zoom; heading levels skipped; avatar links had no accessible name.
+      Now 100.
+- [x] **E2E must run against a production build.** Next's dev chunk loading is cancelled by WebKit,
+      so every page rendered its shell and never hydrated. The built output is fine.
+
+## 2. Needs you
+
+- [x] `.env.local` — done, the app id is in the build.
+- [x] Privy allowed origins — `http://localhost:3000` is allowlisted (visible in Privy's own CSP).
+- [ ] **Privy supported chains** — add Arc testnet (5042002, `https://rpc.testnet.arc.io`, native
+      USDC 18-dec). Still unverified, and without it the embedded wallet cannot sign for Arc at all
+      (risk R8). This is the single thing blocking a real trade.
+- [ ] **A funded Arc testnet account** for the signed-in wallet, from `faucet.circle.com`.
+- [ ] *If we want E2E on the built server:* add `http://localhost:3100` to Privy's allowed origins.
+      Not needed for the current suite, which runs signed out on purpose.
+- [ ] *For the copy demo:* a second X account and a second funded key.
+
+## 3. Verify once signing works
+
+- [ ] Sign in end to end: X login → embedded wallet → `POST auth/session` → real account.
+- [ ] Open a long and a short on BTC; watch the live P&L move. **Ready now — BTC is open.**
 - [ ] Close both; assert the payout matches `lib/trade/pnl.ts` to the base unit.
-- [ ] Copy from the second account; confirm `copiedFrom` is set and a profitable close pays the
-      author on-chain.
+- [ ] Copy from the second account; confirm a profitable close pays the author on-chain.
 - [ ] LP deposit and withdraw; confirm the receipt matches `previewRedeem` exactly.
-- [ ] Point `BACKEND_ORIGIN` at the deployed backend and re-run the above.
+- [ ] Watch a liquidation land in the UI while the position is on screen.
+- [ ] Point `BACKEND_ORIGIN` at their deployed backend and repeat.
+- [ ] Sweep the error states the mock cannot produce — `INSUFFICIENT_LIQUIDITY`, `QUOTE_EXPIRED`,
+      `OPEN_INTEREST_CAP_EXCEEDED`.
+- [ ] **E2E signer mode** (`NEXT_PUBLIC_E2E=1`, a viem local account in place of the Privy UI) and
+      the full Playwright journey. Needs a funded key.
 
-## 3. Gaps found while building
+*Note: a stale-price failure is upstream, not ours — their pusher writes
+`/tmp/cope-pusher-status.json` with `ok` and `healthy` flags. Our market badge derives the same
+thing from `lastPublishTime` against `maxAgeSec` on-chain, which is the better check from here.*
 
-- [ ] **Dangling route.** `components/PositionCard.tsx` links a copied position to
-      `/p/token/<tokenId>`, which does not exist. Either build it (look the thesis up by token id)
-      or link to the origin author's profile instead.
-- [ ] **Edit your bio.** `PATCH me` is live and nothing calls it — there is no settings screen.
-- [ ] **Abandoned quotes are never cancelled.** `cancelTrade` exists; backing out of the confirm
-      panel should call it so the intent is not left pending.
+## 4. Decisions for you
+
 - [ ] **Tweet embeds degrade.** The embed runs in a sandboxed iframe without `allow-same-origin`,
       which blocks X's `widgets.js` (it assigns `document.domain`). The fallback is a styled quote
-      card, which looks deliberate. Decide whether that is good enough for the demo — the only way
-      to get the full rendered tweet is to weaken the sandbox, and I would not.
-- [ ] **Notifications inbox** is mock-only and unwired. `PLAN.md` puts push delivery out of scope;
-      confirm the in-app inbox is out too, or build it.
-
-## 4. Hardening (M7)
-
-- [ ] **E2E signer mode.** `NEXT_PUBLIC_E2E=1` injects a funded testnet key via viem in place of
-      the Privy UI. Needs a key; unblocks the whole Playwright journey.
-- [ ] **Playwright suite** — signed-out shell and every error state against the mock, then the full
-      journey under E2E mode: login → thesis → open → P&L → copy → close → leaderboard.
-- [ ] **Lighthouse PWA audit** — must pass.
-- [ ] **iOS device pass** — install to home screen, and the X OAuth round trip from a standalone
-      window. The login screen already warns about this; confirm the warning is right.
-- [ ] **Bundle size.** ~540 kB first load on trading screens, mostly Privy. Lazy-load `TradeSheet`
-      and the chain layer off the feed.
-- [ ] Error states swept once more with a real backend attached, especially `INSUFFICIENT_LIQUIDITY`
-      and `QUOTE_EXPIRED`, which are hard to trigger against the mock.
+      card that looks deliberate. Good enough for the demo? The only way to get the full rendered
+      tweet is to weaken the sandbox, and I would not.
+- [ ] **Notifications inbox** is mock-only and unwired. `PLAN.md` puts push delivery out of scope —
+      confirm the in-app inbox is out too, or I build it.
+- [ ] **Best Practices is 74**, entirely from Privy: third-party cookies on `auth.privy.io`, a 403
+      on their analytics endpoint, and a CSP frame-ancestors rejection when the origin is not
+      allowlisted. Nothing we can fix, and Privy is a sponsor requirement. Worth knowing before a
+      judge runs Lighthouse.
 
 ## 5. Ship
 
-- [ ] Commit and push (18 paths currently uncommitted).
-- [ ] Deploy to Vercel; add the origin to Privy; point at the deployed backend.
-- [ ] Architecture diagram and demo video (M7 deliverables).
-- [ ] **M8 mainnet cutover, Sept 28–30** — `eth_getCode` on Pyth at `0x2880aB…` on chain 5042,
-      deploy, seed the pool, enable the mainnet asset list, $1 smoke trade, submit.
+- [ ] Commit the work above and push.
+- [ ] Deploy to Vercel; add that origin to Privy; point at their deployed backend.
+- [ ] iOS device pass — install to home screen, and the X OAuth round trip from a standalone
+      window. The login screen already warns about this; confirm the warning is right.
+- [ ] Demo video, and an architecture diagram for the Arc submission.
+- [ ] **Mainnet, by Sept 30** — our half is only the repoint: confirm `GET /chains` serves the
+      mainnet addresses, flip `NEXT_PUBLIC_CHAIN_ENV`, re-run the smoke trade.

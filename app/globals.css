@@ -19,7 +19,7 @@
 
   --color-ink: #e9ebef;
   --color-muted: #8d94a1;
-  --color-dim: #5b626f;
+  --color-dim: #767d8a;
 
   --color-long: #29d391;
   --color-long-soft: #0e3b2c;
@@ -51,6 +51,14 @@ body {
   /* Clearance for the fixed tab bar is applied per screen in AppChrome, because sign-in has no
      bar and should not carry the space where one would be. */
   overscroll-behavior-y: none;
+}
+
+/* Removes the browser's wait for a possible double-tap before a control responds. The viewport no
+   longer blocks zoom, so this is where the tap latency is dealt with instead. */
+button,
+a,
+[role="button"] {
+  touch-action: manipulation;
 }
 
 /* Numerals never reflow as they tick. */

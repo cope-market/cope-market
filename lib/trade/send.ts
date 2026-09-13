@@ -1,6 +1,6 @@
 "use client";
 
-import {useCallback, useState} from "react";
+import {useCallback, useRef, useState} from "react";
 import {useQueryClient} from "@tanstack/react-query";
 import type {Address, Hex} from "viem";
 import {useApi} from "../api/provider";
@@ -76,8 +76,24 @@ export function useTrade() {
   const chain = useChainSettings();
   const queryClient = useQueryClient();
   const [progress, setProgress] = useState<TradeProgress>(IDLE);
+  // React calls a state updater twice under StrictMode, so the cancel below cannot live inside one
+  // without sending the request twice. A ref gives `reset` the current value without that.
+  const latest = useRef(progress);
+  latest.current = progress;
 
-  const reset = useCallback(() => setProgress(IDLE), []);
+  /// Abandons an intent the user backed out of, and forgets it locally either way.
+  ///
+  /// An intent is recorded on the server before the transaction is built, so walking away from the
+  /// confirm panel leaves a row pending until it expires. Cancelling is only valid while it is
+  /// still pending and nothing depends on it succeeding, so a failure here is swallowed: the user
+  /// has already moved on, and the intent expires by itself regardless.
+  const reset = useCallback(() => {
+    const current = latest.current;
+    if (current.intent && current.txHash === null && current.stage !== "done") {
+      void api.cancelTrade({params: {tradeId: current.intent.tradeId}, body: {}}).catch(() => {});
+    }
+    setProgress(IDLE);
+  }, [api]);
 
   /// Makes sure the vault can pull `collateral`, approving without a cap if it cannot. Returns
   /// false if the user declined, which is not an error worth shouting about.

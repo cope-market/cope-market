@@ -5,7 +5,7 @@ import Link from "next/link";
 import {ASSET_CLASS_LABEL, useAssets} from "@/lib/api/assets";
 import {useMarket, useOpenInterest, useMarkets} from "@/lib/chain/hooks";
 import {MarketBadge} from "@/components/MarketBadge";
-import {TradeSheet} from "@/components/TradeSheet";
+import {TradeSheet} from "@/components/lazy";
 import {AsOf, Button, Card, ErrorState, Row, Screen, Skeleton} from "@/components/ui";
 import {formatAge, formatBps, formatPrice, formatWad, percentOf} from "@/lib/format";
 

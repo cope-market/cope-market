@@ -4,6 +4,7 @@ import {useCallback} from "react";
 import type {ReactNode} from "react";
 import {PrivyProvider, usePrivy} from "@privy-io/react-auth";
 import {ApiProvider} from "@/lib/api/provider";
+import {AnonymousSessionProvider, PrivySessionProvider} from "@/lib/auth/session";
 import {arcTestnet} from "@/lib/chain/arc";
 
 /// Privy owns sign-in and the embedded wallet; the API client owns the token it issues.
@@ -23,16 +24,25 @@ function PrivyBackedApi({children}: {children: ReactNode}) {
     return await getAccessToken();
   }, [authenticated, getAccessToken]);
 
-  return <ApiProvider getAccessToken={token}>{children}</ApiProvider>;
+  return (
+    <ApiProvider getAccessToken={token}>
+      <PrivySessionProvider>{children}</PrivySessionProvider>
+    </ApiProvider>
+  );
 }
 
 const anonymous = async () => null;
 
 export function Providers({children}: {children: ReactNode}) {
   // Without an app id the app still runs, signed out. That keeps a fresh checkout useful before
-  // anyone has touched configuration, and it is the path Playwright drives.
+  // anyone has touched configuration, and it is the path Playwright drives. The session comes from
+  // a different provider here, because the Privy hooks do not exist outside a PrivyProvider.
   if (!appId) {
-    return <ApiProvider getAccessToken={anonymous}>{children}</ApiProvider>;
+    return (
+      <ApiProvider getAccessToken={anonymous}>
+        <AnonymousSessionProvider>{children}</AnonymousSessionProvider>
+      </ApiProvider>
+    );
   }
 
   return (

@@ -12,7 +12,7 @@ import {useCopiesOf} from "@/lib/graph/hooks";
 import {Avatar} from "@/components/Avatar";
 import {PnlBadge} from "@/components/PnlBadge";
 import {TweetEmbed} from "@/components/TweetEmbed";
-import {TradeSheet} from "@/components/TradeSheet";
+import {TradeSheet} from "@/components/lazy";
 import {CommentIcon, HeartIcon} from "@/components/StatIcons";
 import {AsOf, Button, Card, ErrorState, Pill, Row, Screen, Skeleton} from "@/components/ui";
 import {formatAge, formatPrice, formatUsdc6} from "@/lib/format";
@@ -69,7 +69,7 @@ export default function ThesisPage({params}: {params: Promise<{thesisId: string}
     <Screen title={symbolFor(data.feedId)} subtitle={`Posted ${formatAge(age)}`}>
       <Card className="p-4">
         <div className="flex items-center gap-2.5">
-          <Link href={`/u/${data.author.handle}`}>
+          <Link href={`/u/${data.author.handle}`} aria-label={`${data.author.name}'s profile`}>
             <Avatar src={data.author.avatarUrl} name={data.author.name} size={40} />
           </Link>
           <div className="min-w-0">

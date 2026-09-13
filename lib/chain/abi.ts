@@ -13,6 +13,8 @@ export const syntheticVaultAbi = parseAbi([
   "function totalLiability() view returns (int256)",
   "function avgEntry(bytes32 feedId, bool isLong) view returns (uint256)",
   "function authorFeeBps() view returns (uint16)",
+  "function liquidationThresholdBps() view returns (uint16)",
+  "function liquidationRewardBps() view returns (uint16)",
   "function nextTokenId() view returns (uint256)",
   "function ownerOf(uint256 tokenId) view returns (address)",
   "function balanceOf(address owner) view returns (uint256)",
@@ -21,6 +23,7 @@ export const syntheticVaultAbi = parseAbi([
   "function close(uint256 tokenId, bytes[] updateData) payable",
   "event PositionOpened(uint256 indexed tokenId, address indexed owner, bytes32 indexed feedId, bool isLong, uint128 collateral, uint256 units, uint256 entryPrice, uint256 copiedFromId)",
   "event PositionClosed(uint256 indexed tokenId, address indexed closedBy, bytes32 indexed feedId, uint256 exitPrice, int256 pnlWad, uint256 payout)",
+  "event PositionLiquidated(uint256 indexed tokenId, address indexed liquidator, bytes32 indexed feedId, uint256 exitPrice, int256 pnlWad, uint256 payout, uint256 reward)",
 ]);
 
 export const priceOracleAbi = parseAbi([

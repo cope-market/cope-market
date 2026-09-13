@@ -4,7 +4,9 @@ import {useState} from "react";
 import Link from "next/link";
 import {AuthGate} from "@/components/AuthGate";
 import {PositionCard} from "@/components/PositionCard";
-import {ClosePositionSheet} from "@/components/ClosePositionSheet";
+import {ClosePositionSheet, EditBioSheet} from "@/components/lazy";
+import {SettledNotice} from "@/components/SettledNotice";
+
 import {AsOf, Button, Card, Empty, ErrorState, Pill, Row, Screen, Skeleton} from "@/components/ui";
 import {useSession} from "@/lib/auth/session";
 import {useWallet} from "@/lib/chain/hooks";
@@ -38,12 +40,14 @@ function Wallet() {
   const approve = useApproveUsdc();
   const {
     positions,
+    settled,
     isLoading: positionsLoading,
     isError: positionsError,
     refetch,
   } = useLivePositions(address);
 
   const [closingTokenId, setClosingTokenId] = useState<bigint | null>(null);
+  const [editingBio, setEditingBio] = useState(false);
   const [approving, setApproving] = useState(false);
   const [approvalError, setApprovalError] = useState<string | null>(null);
 
@@ -76,6 +80,22 @@ function Wallet() {
         </button>
       }
     >
+      <Card className="mb-2 p-4">
+        <div className="flex items-start justify-between gap-3">
+          <p
+            className={`text-[0.8125rem] leading-relaxed ${profile?.bio ? "text-muted" : "text-dim"}`}
+          >
+            {profile?.bio ?? "No bio yet. It is the first thing someone reads before copying you."}
+          </p>
+          <button
+            onClick={() => setEditingBio(true)}
+            className="shrink-0 text-[0.8125rem] font-medium text-accent"
+          >
+            Edit
+          </button>
+        </div>
+      </Card>
+
       <Card className="p-4">
         {wallet.isLoading ? (
           <Skeleton className="h-24" />
@@ -155,6 +175,8 @@ function Wallet() {
           {positions.length > 0 ? <Pill>{positions.length}</Pill> : null}
         </h2>
 
+        <SettledNotice positions={settled} />
+
         {positionsLoading ? (
           <Skeleton className="h-32" />
         ) : positionsError ? (
@@ -163,7 +185,7 @@ function Wallet() {
             detail="Open positions are found through the subgraph, which did not answer. Your positions are safe on-chain either way."
             onRetry={refetch}
           />
-        ) : positions.length === 0 ? (
+        ) : positions.length === 0 && settled.length === 0 ? (
           <Empty
             title="No open positions"
             detail="Back a thesis, or open one directly from a market."
@@ -201,6 +223,12 @@ function Wallet() {
           Browse markets →
         </Link>
       </p>
+
+      <EditBioSheet
+        open={editingBio}
+        onClose={() => setEditingBio(false)}
+        bio={profile?.bio ?? null}
+      />
 
       <ClosePositionSheet
         live={positions.find((live) => live.position.tokenId === closingTokenId) ?? null}

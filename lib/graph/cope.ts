@@ -25,7 +25,12 @@ const IndexedPosition = z.object({
   realizedPnlWad: NullableBigIntString,
   payout: NullableBigIntString,
   authorFeePaid: NullableBigIntString,
+  /// Set only on a liquidated position: the USDC the liquidator was paid, out of the payout the
+  /// owner would otherwise have received.
+  liquidationReward: NullableBigIntString,
   closedAt: NullableBigIntString,
+  /// Who closed it. On a liquidation this is the keeper, not the owner.
+  closedBy: z.string().nullable(),
   copyCount: z.number(),
   copiedFrom: z.object({tokenId: BigIntString, author: z.object({id: z.string()})}).nullable(),
 });
@@ -47,7 +52,9 @@ const POSITION_FIELDS = `
   realizedPnlWad
   payout
   authorFeePaid
+  liquidationReward
   closedAt
+  closedBy
   copyCount
   copiedFrom { tokenId author { id } }
 `;

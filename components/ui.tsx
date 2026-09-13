@@ -39,7 +39,7 @@ export function Card({children, className = ""}: {children: ReactNode; className
 export function Row({label, value, hint}: {label: ReactNode; value: ReactNode; hint?: ReactNode}) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-2">
-      <span className="text-[0.8125rem] text-muted">{label}</span>
+      <span className="shrink-0 text-[0.8125rem] text-muted">{label}</span>
       <span className="text-right">
         <span className="num text-[0.9375rem] text-ink">{value}</span>
         {hint ? <span className="ml-2 text-[0.75rem] text-dim">{hint}</span> : null}

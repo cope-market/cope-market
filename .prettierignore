@@ -1,6 +1,10 @@
 .next
 node_modules
-lib/api/openapi.json
+# Vendored verbatim from the backend by scripts/sync-api.ts. Formatting them here would break the
+# byte-equality that `npm run api:check` relies on to detect drift.
+lib/api
+lib/trade/quote.ts
+lib/trade/fixtures
 package-lock.json
 public/sw.js
 

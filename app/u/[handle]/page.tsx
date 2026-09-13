@@ -10,6 +10,7 @@ import {useClosedPositions, useTraderRecord} from "@/lib/graph/hooks";
 import {winRate} from "@/lib/graph/cope";
 import {Avatar} from "@/components/Avatar";
 import {PositionCard} from "@/components/PositionCard";
+import {SettledNotice} from "@/components/SettledNotice";
 import {AsOf, Button, Card, Empty, ErrorState, Pill, Row, Screen, Skeleton} from "@/components/ui";
 import {formatPnlWad, formatUsdc6, shortAddress} from "@/lib/format";
 import {explorerAddressUrl} from "@/lib/chain/arc";
@@ -39,7 +40,7 @@ export default function ProfilePage({params}: {params: Promise<{handle: string}>
   const address = profile.data?.walletAddress;
   const record = useTraderRecord(address);
   const closed = useClosedPositions(address);
-  const {positions: open, isLoading: openLoading} = useLivePositions(address);
+  const {positions: open, settled, isLoading: openLoading} = useLivePositions(address);
 
   const follow = useMutation({
     mutationFn: async (isFollowing: boolean) =>
@@ -170,9 +171,11 @@ export default function ProfilePage({params}: {params: Promise<{handle: string}>
           Open positions
           {open.length > 0 ? <Pill>{open.length}</Pill> : null}
         </h2>
+        <SettledNotice positions={settled} />
+
         {openLoading ? (
           <Skeleton className="h-28" />
-        ) : open.length === 0 ? (
+        ) : open.length === 0 && settled.length === 0 ? (
           <Empty title="Nothing open" detail="This trader holds no positions right now." />
         ) : (
           <ul className="space-y-2">
@@ -210,6 +213,9 @@ export default function ProfilePage({params}: {params: Promise<{handle: string}>
                     </div>
                     <p className="num mt-0.5 text-[0.6875rem] text-dim">
                       #{String(position.tokenId)} · {formatUsdc6(position.collateral)} USDC
+                      {position.liquidationReward !== null && position.liquidationReward > 0n
+                        ? ` · ${formatUsdc6(position.liquidationReward, {min: 2, max: 6})} to the liquidator`
+                        : ""}
                     </p>
                   </div>
                   <span

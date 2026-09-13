@@ -1,6 +1,7 @@
 "use client";
 
-import {useCallback} from "react";
+import {createContext, useCallback, useContext} from "react";
+import type {ReactNode} from "react";
 import {useQuery, useQueryClient} from "@tanstack/react-query";
 import {getEmbeddedConnectedWallet, useLogout, usePrivy, useWallets} from "@privy-io/react-auth";
 import type {Address} from "viem";
@@ -33,7 +34,42 @@ export interface Session {
   refresh: () => void;
 }
 
+/// Session state is provided rather than computed in place, because the Privy hooks only work
+/// inside a PrivyProvider and the app deliberately runs without one when no app id is configured —
+/// a fresh checkout, and CI. Choosing between two providers is a component boundary, which is
+/// allowed; calling `usePrivy` conditionally is not.
+const SessionContext = createContext<Session | null>(null);
+
 export function useSession(): Session {
+  const session = useContext(SessionContext);
+  if (!session) throw new Error("useSession must be used inside <SessionProvider>.");
+  return session;
+}
+
+const SIGNED_OUT: Session = {
+  ready: true,
+  authenticated: false,
+  profile: null,
+  address: undefined,
+  loading: false,
+  error: null,
+  signIn: () => {},
+  signOut: async () => {},
+  refresh: () => {},
+};
+
+/// For when there is no Privy app id. Everything renders in its signed-out state, which is what
+/// makes a fresh clone useful before anyone has touched configuration.
+export function AnonymousSessionProvider({children}: {children: ReactNode}) {
+  return <SessionContext.Provider value={SIGNED_OUT}>{children}</SessionContext.Provider>;
+}
+
+export function PrivySessionProvider({children}: {children: ReactNode}) {
+  const session = usePrivySession();
+  return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
+}
+
+function usePrivySession(): Session {
   const {ready, authenticated, user, login} = usePrivy();
   const {logout} = useLogout();
   const {wallets} = useWallets();
