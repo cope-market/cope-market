@@ -27,16 +27,21 @@ cp env.example .env.local     # nothing in it is secret
 npm run dev                   # http://localhost:3000
 ```
 
-The app needs an API to talk to. Until the backend is deployed, run its mock — no database, no
-chain, no configuration:
+The app needs an API to talk to. `BACKEND_ORIGIN` in `env.example` points at the live backend,
+which runs behind a tunnel on a teammate's machine with real Postgres, the price pusher and the
+liquidation keeper. That URL changes when the tunnel restarts.
+
+To work without it, run the backend's mock — no database, no chain, no configuration:
 
 ```bash
 git clone https://github.com/cope-market/backend.git ../cope-market-backend
 cd ../cope-market-backend && npm ci && PORT=4000 npm run mock
 ```
 
-`BACKEND_ORIGIN` points at it, and `next.config.ts` proxies `/api/v1/*` there so every request is
-same-origin and CORS never enters the picture.
+Either way `middleware.ts` proxies `/api/v1/*` there, so the browser only ever talks to this
+origin. That keeps the backend's CORS allowlist out of the picture — it names `localhost:3000`
+only, which would exclude the port the end-to-end suite runs on — and it adds the header that stops
+ngrok serving its interstitial to a browser-looking request.
 
 Chain reads need nothing configured: Arc testnet's RPC and both subgraph endpoints are public.
 
@@ -49,6 +54,7 @@ Chain reads need nothing configured: Arc testnet's RPC and both subgraph endpoin
 | `npm run verify:graph` | Runs every subgraph query the app uses against the live indexers |
 | `npm run shot -- /markets` | Screenshots a route at phone size |
 | `npm run api:sync` | Re-copies the API contract from the backend |
+| `npm run e2e` | Playwright, against a production build on WebKit and Chromium |
 
 ## How it is put together
 
@@ -94,7 +100,9 @@ Arc testnet rather than against our own reading of the source.
   one snapshot has no return. Neither is zero, and neither is shown as zero.
 - **P&L belongs to the author, not the holder.** A position NFT can be sold; `author` never
   changes. Rankings and attribution use it.
-- **The service worker never caches a price or a trade.** A stale quote is worse than no quote.
+- **The service worker never caches an API response.** Not the trade routes, not the feed, not
+  the leaderboard — a stale quote is one the contract rejects, and a leaderboard served from
+  yesterday defeats the point of it failing loudly when the subgraph is down.
 
 ## What is not built
 

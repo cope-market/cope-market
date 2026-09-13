@@ -1,12 +1,6 @@
 import withSerwistInit from "@serwist/next";
 import type {NextConfig} from "next";
 
-/// The backend lives in its own repository and its own deployment. Proxying it under our own
-/// origin means the browser never makes a cross-origin request, so CORS configuration stops being
-/// something two repositories have to agree on, and the service worker sees API traffic on the
-/// same origin as the shell.
-const backendOrigin = process.env["BACKEND_ORIGIN"] ?? "http://localhost:4000";
-
 const withSerwist = withSerwistInit({
   swSrc: "app/sw.ts",
   swDest: "public/sw.js",
@@ -32,9 +26,6 @@ const nextConfig: NextConfig = {
       "@solana-program/token": false,
     };
     return config;
-  },
-  async rewrites() {
-    return [{source: "/api/v1/:path*", destination: `${backendOrigin}/api/v1/:path*`}];
   },
 };
 

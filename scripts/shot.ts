@@ -35,7 +35,9 @@ async function main(): Promise<void> {
   // Not `networkidle`: prices poll and Privy holds a connection open, so the network is never
   // idle by design. Load, then give the first multicall and the first API call time to land.
   await page.goto(`${baseUrl}${route}`, {waitUntil: "domcontentloaded", timeout: 45_000});
-  await page.waitForTimeout(5_000);
+  // Long enough for the first multicall and the API call behind it. A development build compiles
+  // the route on first request, so this is generous on purpose.
+  await page.waitForTimeout(12_000);
 
   const path = `screenshots/${name}.png`;
   await page.screenshot({path, fullPage: true});

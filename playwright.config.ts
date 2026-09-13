@@ -33,6 +33,9 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 240_000,
     env: {
+      // The mock, not the live tunnel: these tests assert on fixture content, and a tunnel URL
+      // that changes when it restarts is not something a suite should depend on. Override
+      // BACKEND_ORIGIN to point a run at the real backend.
       BACKEND_ORIGIN: process.env["BACKEND_ORIGIN"] ?? "http://localhost:4000",
       // Built without a Privy app id on purpose. This suite is entirely signed out, and the
       // alternative is every test pulling in a third party's script, cookies and CSP — which makes
