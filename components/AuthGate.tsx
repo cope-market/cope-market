@@ -10,6 +10,10 @@ import {describeApiError, isApiError} from "@/lib/api/errors";
 
 /// Wraps a screen that needs an account. The three states it distinguishes matter: Privy still
 /// restoring, signed out, and signed in but the account not yet created on our side.
+///
+/// All three render in place of a `Screen`, so none of them inherit its safe-area padding — a plain
+/// top margin puts the card under the status bar on a notched iPhone, where it reads as clipped
+/// rather than as positioned. Each branch carries the inset itself.
 
 export function AuthGate({children}: {children: ReactNode}) {
   const {ready, authenticated, profile, loading, error, refresh, signOut} = useSession();
@@ -28,7 +32,7 @@ export function AuthGate({children}: {children: ReactNode}) {
 
   if (!ready || loading) {
     return (
-      <div className="space-y-2 px-4 py-6">
+      <div className="space-y-2 px-4 pb-6 pt-[max(2rem,calc(env(safe-area-inset-top)+1.5rem))]">
         <Skeleton className="h-20" />
         <Skeleton className="h-32" />
       </div>
@@ -37,15 +41,17 @@ export function AuthGate({children}: {children: ReactNode}) {
 
   if (!authenticated) {
     return (
-      <Card className="mx-4 mt-4 p-6 text-center">
-        <p className="text-[0.9375rem] font-semibold">Sign in to continue</p>
-        <p className="mx-auto mt-1 max-w-xs text-[0.8125rem] text-muted">
-          This needs an account and a wallet. Both come from signing in with X.
-        </p>
-        <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="mt-4 inline-block">
-          <Button>Continue with X</Button>
-        </Link>
-      </Card>
+      <div className="px-4 pb-6 pt-[max(2rem,calc(env(safe-area-inset-top)+1.5rem))]">
+        <Card className="p-6 text-center">
+          <p className="text-[0.9375rem] font-semibold">Sign in to continue</p>
+          <p className="mx-auto mt-1 max-w-xs text-[0.8125rem] text-muted">
+            This needs an account and a wallet. Both come from signing in with X.
+          </p>
+          <Link href={`/login?next=${encodeURIComponent(pathname)}`} className="mt-4 inline-block">
+            <Button>Continue with X</Button>
+          </Link>
+        </Card>
+      </div>
     );
   }
 
@@ -55,7 +61,7 @@ export function AuthGate({children}: {children: ReactNode}) {
     // has no way to do from here, so it gets the action rather than a bare message.
     const stale = isApiError(error, "UNAUTHORIZED") && !copy.retryable;
     return (
-      <div className="px-4 py-4">
+      <div className="px-4 pb-6 pt-[max(2rem,calc(env(safe-area-inset-top)+1.5rem))]">
         <ErrorState
           title={copy.title}
           detail={copy.detail}

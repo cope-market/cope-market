@@ -56,7 +56,7 @@ export function Providers({children}: {children: ReactNode}) {
         appearance: {
           theme: "dark",
           accentColor: "#8b7cff",
-          logo: "/icons/icon-192.png",
+          logo: "/cope-logo.png",
           walletChainType: "ethereum-only",
         },
       }}
