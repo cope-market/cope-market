@@ -51,28 +51,22 @@ against the contract. You no longer have to special-case them.
 A real backend — not the mock — is running on Lajos's machine and tunnelled. It has Postgres behind
 it, the price pusher keeping feeds fresh, and the liquidation keeper running.
 
+Use the rewrite you already built. In `.env.local`:
+
 ```
-NEXT_PUBLIC_API_BASE_URL=https://duty-concierge-semester.ngrok-free.dev/api/v1
+BACKEND_ORIGIN=https://duty-concierge-semester.ngrok-free.dev
 ```
 
-Then `npm run api:sync`, because the typed client changed. Nothing else: no header to add, no proxy
-to configure.
+and leave `NEXT_PUBLIC_API_BASE_URL` **unset**, so it defaults to `/api/v1` and goes through the
+proxy in `next.config.ts`. The browser then makes a same-origin request, Next forwards it
+server-side, and neither CORS nor ngrok's browser interstitial applies at all.
 
-Two things were in the way and are now fixed in the backend, so you do not have to work around
-either.
+Setting `NEXT_PUBLIC_API_BASE_URL` to the tunnel URL also works — the backend now sends CORS headers
+and the typed client handles the interstitial — but it is the worse path, and it is the one that
+needs both of those workarounds to exist. Your proxy was right.
 
-**CORS.** There was none. Every request carries an `authorization` header, which makes even a GET
-preflighted, so the browser refused each call before sending it. `http://localhost:3000` is on the
-allowlist; tell us if you need another origin, and note that a different port is a different origin.
-
-**ngrok's interstitial.** The free tier answers browser-looking requests with an HTML warning page
-instead of proxying them, so the API returned `text/plain` and the client failed parsing JSON it
-never received. curl looked perfect the whole time. The typed client now sends ngrok's opt-out
-header automatically when the base URL is a tunnel host, so this is invisible to you — but it is
-why `npm run api:sync` matters before you try.
-
-The tunnel URL changes whenever it restarts. If calls start failing, ask for the current one rather
-than assuming the backend is down.
+The tunnel URL changes whenever ngrok restarts. If calls start failing, ask for the current one
+rather than assuming the backend is down.
 
 ### What is real and what is not
 
